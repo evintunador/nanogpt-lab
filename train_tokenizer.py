@@ -209,7 +209,7 @@ def bpe_train(
     ranks = {}
     for i in range(2**8):
         ranks[bytes([i])] = i
-    
+
     # choose efficient data type
     int_type = torch.int16 if vocab_size <= (2**16)-2 else torch.int32
     assert vocab_size <= (2**31)-2, f"bro why you making such a big tokenizer? {vocab_size}"
@@ -226,11 +226,18 @@ def bpe_train(
     byte_ids_lofl = [[ranks[b] for b in word] for word in words]
     # convert from (0,1,2,3...,255) to (0,1,-1,2,-2,...,127,-127,128) to saturate int16
     ids_lofl = convert_lofl(byte_ids_lofl, nat2int)
-    # turn data into parseable tensor - using the token IDs instead of raw bytes
-    ids = torch.tensor(
-        list(chain.from_iterable(word + [SEPARATOR_TOKEN] for word in ids_lofl))[:-1], 
-        dtype=int_type, device=device)
-        # shape (words_in_data * (avg_word_len + 1))\
+
+    # turn data into tensor pairs
+    pair1 = [];
+    pair2 = [];
+    for word in ids_lofl:
+        if len(word) > 1:
+            pair1.extend(word[:-1])
+            pair2.extend(word[1:])
+    t1 = torch.tensor(pair1, dtype=int_type, device=device)
+    t2 = torch.tensor(pair2, dtype=int_type, device=device)
+    ids = torch.stack([t1, t2])
+
     
     if master_process and demo:
         # Initialize demo text tokens outside the loop to track changes across iterations
@@ -243,15 +250,9 @@ def bpe_train(
     progress_bar = tqdm(total=vocab_size - 256, unit="merges")
     for j in range(256, vocab_size):
         # find frequency of all pairs
-        pairs = torch.stack((ids[:-1], ids[1:]), dim=0) # (2, words_in_data * (avg_word_len + 1))
-        unique, counts = torch.unique(pairs, return_counts=True, dim=1)
+        unique, counts = torch.unique(ids, return_counts=True, dim=1)
             # shapes (2, very_long) and (very_long)
-            # where very_long < words_in_data * (avg_word_len + 1)
-        
-        # use separator token between words to ensure we follow regex
-        valid_mask = torch.all(unique != SEPARATOR_TOKEN, dim=0) # (very_long)
-        unique = unique[:, valid_mask] # (2, very_long)
-        counts = counts[valid_mask] # (very_long)
+            # where very_long < words_in_data
 
         if world_size > 1:
             # select top k pairs to go into consideration
@@ -305,17 +306,27 @@ def bpe_train(
                 best_bytes[0] = bytes_token
             if id_token == best_pair_1:
                 best_bytes[1] = bytes_token
+
         token_bytes = best_bytes[0] + best_bytes[1]
         new_token_id = len(ranks)
         # Add the new token!
         ranks[token_bytes] = new_token_id
 
         # Now merge that most common pair in all the words
-        pair_mask = (pairs[0] == best_pair[0]) & (pairs[1] == best_pair[1]) 
-        ids[:-1][pair_mask] = nat2int(new_token_id)
-        ids[1:][pair_mask] = REMOVE_TOKEN
-        keep_mask = (ids != REMOVE_TOKEN)
-        ids = ids[keep_mask]
+        match_mask = (ids[0] == best_pair[0]) & (ids[1] == best_pair[1]) 
+        # replace ids[0] == best_pair[1] *after* the matched pairs
+        after_mask = torch.zeros_like(match_mask)
+        after_mask[1:] = match_mask[:-1]
+        replace_ids0_mask = after_mask & (ids[0] == best_pair[1])
+        ids[0][replace_ids0_mask] = nat2int(new_token_id)
+        # replace ids[1] == best_pair[0] *before* the matched pairs
+        before_mask = torch.zeros_like(match_mask)
+        before_mask[:-1] = match_mask[1:]
+        replace_ids1_mask = before_mask & (ids[1] == best_pair[0])
+        ids[1][replace_ids1_mask] = nat2int(new_token_id)
+        # Delete the matched pairs
+        keep_mask = ~match_mask
+        ids = ids[:, keep_mask]
 
         if master_process:
             progress_bar.update(1)
