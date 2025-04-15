@@ -169,35 +169,27 @@ def slow_merge(words, most_common_pair, token_bytes):
     return new_words
 
 
-def nat2int(num):
+def nat2int(num: int):
     """
     converts natural numbers to integer counterparts for use in
     efficiently utilizing signed int datatypes
-    (0, 1, 2, 3,...) -> (0, 1, -1, 2, -2,...)
+    (0, 1, 2, 3,...) -> (0, -1, 1, -2, 2,...)
     """
-    if num == 0:
-        return 0
-    elif num % 2 == 1:  # odd numbers map to positive
-        return (num + 1) // 2
-    else:  # even numbers (except 0) map to negative
-        return -(num // 2)
-
-def int2nat(num):
+    if num % 2 == 0:  # even numbers map to positive
+        return num // 2
+    else: # odd numbers map to negative
+        return -(num + 1) // 2
+    
+def int2nat(num: int):
     """
     converts integer numbers to natural counterparts for use in
     efficiently utilizing signed int datatypes
-    (0, 1, -1, 2, -2,...) -> (0, 1, 2, 3,...)
+    (0, -1, 1, -2, 2,...) -> (0, 1, 2, 3,...)
     """
-    if num == 0:
-        return 0
-    elif num > 0:  # positive numbers map back to odd
-        return 2 * num - 1
-    else:  # negative numbers map back to even
-        return -2 * num
-
-def convert_lofl(lists, f):
-    """applies a function to entries in a list of lists"""
-    return [[f(num) for num in sublist] for sublist in lists]
+    if num >= 0:  # positive numbers map back to even
+        return 2 * num
+    else:  # negative numbers map back to odd
+        return -2 * num - 1
 
 
 def bpe_train(
@@ -224,8 +216,8 @@ def bpe_train(
     # Create a list to store numeric token IDs for tensor operations
     # Initially, these are just byte values (0-255)
     byte_ids_lofl = [[ranks[b] for b in word] for word in words]
-    # convert from (0,1,2,3...,255) to (0,1,-1,2,-2,...,127,-127,128) to saturate int16
-    ids_lofl = convert_lofl(byte_ids_lofl, nat2int)
+    # convert from (0,1,2,3...,255) to (0,-1,1,-2,2,...,-127,127,-128) to saturate int16
+    ids_lofl = [[nat2int(num) for num in sublist] for sublist in byte_ids_lofl]
     # turn data into parseable tensor - using the token IDs instead of raw bytes
     ids = torch.tensor(
         list(chain.from_iterable(word + [SEPARATOR_TOKEN] for word in ids_lofl))[:-1], 

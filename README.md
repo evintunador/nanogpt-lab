@@ -62,7 +62,10 @@ torchrun --nproc_per_node=G train_gpt.py --model_name ReadmeGPT --tokenizer read
 9. great, now that all that is confirmed to be up & working you can start editing the code and running your own experiments!
 
 ## todos / planned features:
-- [ ] write a `contributing.md` to detail best practices for potential contributors
+- meta
+    - [ ] write a `contributing.md` to detail best practices for potential contributors
+    - [ ] build testing script
+    - [ ] switch to legit versions & stop working on main branch
 - [ ] excessively comment and explain everything that's happening in each file
     - [ ] ensure consistency in comment style (eg. choose between (B,N,D) and (batch_size, seq_len, model_dim))
 - [ ] **implement more of my ideas using the code as it stands as a baseline to test & learn more about how this repo should work**
