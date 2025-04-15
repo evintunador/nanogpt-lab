@@ -1,5 +1,28 @@
 # GPT-Lab **(currently in ALPHA)**
-this repo is a massive overhaul of [Modded-NanoGPT](https://github.com/KellerJordan/modded-nanogpt) with the goal of being a base for amateurs to do cheap & easy LLM experiments at a large enough scale to be worthy of an arxiv preprint. the idea is that repos like Modded-NanoGPT, [NanoGPT](https://github.com/karpathy/nanoGPT), [TinyLlama](https://github.com/jzhang38/TinyLlama), and [Meta's Lingua](https://github.com/facebookresearch/lingua), are either too old of an architecture, too purpose-specific, not from-scratch enough, too expensive to run, too overly-complicated, not well setup for quickly iterating research ideas, etc and we plan to occupy a unique balance of those trade-offs
+
+Goal of this repository is open source superintelligence.
+
+Right now you can train an LLM from scratch 15x faster.
+
+We will develop extremely efficient LLM (or future best) architecture that can be trained for free or on low budget.
+
+DeepSeek brought down cost of training by a few order of magnitude, we need to do it by a few more.
+
+Good news:
+1. compute is no loger the bottleneck, it's optimizing data, choosing the best algorithm, optimizations, etc.
+2. we have numbers / human intelligence advantage over close source LLMs
+
+We believe our biggest contributors will be universities & other open source institutes, hence we will do our best to work with them, and anybody else who wants to contribute, including individuals, beginners and for profit companies.
+
+### How to contibute
+Make sure you understand the research, code and mechanism behind what you are contributing.
+
+Just generating code with AI without understanding what and why could cause more harm then good.
+
+
+## Notes by Evin (Tunadorable)
+
+This repo is a massive overhaul of [Modded-NanoGPT](https://github.com/KellerJordan/modded-nanogpt) with the goal of being a base for amateurs to do cheap & easy LLM experiments at a large enough scale to be worthy of an arxiv preprint. the idea is that repos like Modded-NanoGPT, [NanoGPT](https://github.com/karpathy/nanoGPT), [TinyLlama](https://github.com/jzhang38/TinyLlama), and [Meta's Lingua](https://github.com/facebookresearch/lingua), are either too old of an architecture, too purpose-specific, not from-scratch enough, too expensive to run, too overly-complicated, not well setup for quickly iterating research ideas, etc and we plan to occupy a unique balance of those trade-offs
 
 **this repo is currently in alpha, meaning that I think it's somewhat workable but have not utilized it on enough of my own experiments to guarantee that. before taking it out of alpha I will:**
     
