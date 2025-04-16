@@ -26,7 +26,6 @@ import argparse
 import numpy as np
 import pickle
 from functools import partial
-import random
 
 def write_datafile(filename, toks):
     """ 
@@ -65,35 +64,31 @@ def tokenize(doc, enc, eot):
 
 def main():
     parser = argparse.ArgumentParser(description="FineWeb dataset preprocessing")
-    parser.add_argument("-v", "--version", type=str, default="10Bedu", help="Which version of fineweb to use? 10B|100B|350B|10Bedu|100Bedu|350Bedu (default 10Bedu)")
+    parser.add_argument("-v", "--version", type=str, default="10Bedu", help="Which version of fineweb to use? 10B|100B|10Bedu|100Bedu (default 10Bedu)")
     parser.add_argument("-ss", "--shard_size", type=int, default=10**8, help="Size of each shard in tokens (default 100 million)")
     parser.add_argument("-ns", "--num_shards", type=int, default=None, help="Maximum number of shards to create (defaults to entire dataset)")
     parser.add_argument("-t", "--tokenizer", type=str, default="gpt4regex_v50256_n134217728", help="Filename of custom tokenizer (no default)")
-    parser.add_argument("--shuffle", action="store_true", help="Shuffle the dataset before processing")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed for shuffling (default 42)")
     args = parser.parse_args()
     assert args.tokenizer[-4:] == ".pkl", f"tokenizer must be .pkl"
 
     # FineWeb has a few possible subsamples available
-    valid_versions = ["10B", "100B", "350B", "10Bedu", "100Bedu", "350Bedu"]
-    assert args.version in valid_versions, f"version must be one of {', '.join(valid_versions)}"
-    
-    # Set up dataset parameters based on version
-    is_edu = "edu" in args.version
-    base_version = args.version.replace("edu", "")
-    
-    hug_name = "HuggingFaceFW/fineweb-edu" if is_edu else "HuggingFaceFW/fineweb"
-    savename = "finewebedu" if is_edu else "fineweb"
-    
-    if base_version == "10B":
+    assert args.version in ["10B", "100B", "10Bedu", "100Bedu"], "version must be one of 10B, 100B, 10Bedu, or 100Bedu"
+    if args.version == "10B":
+        hug_name = "HuggingFaceFW/fineweb"
         remote_name = "sample-10BT"
-    elif base_version == "100B":
+        savename = "fineweb"
+    elif args.version == "100B":
+        hug_name = "HuggingFaceFW/fineweb"
         remote_name = "sample-100BT"
-    elif base_version == "350B":
-        remote_name = "sample-350BT"
-    else:
-        raise ValueError(f"Invalid version: {args.version}")
-
+        savename = "fineweb"
+    elif args.version == "10Bedu":
+        hug_name = "HuggingFaceFW/fineweb-edu"
+        remote_name = "sample-10BT"
+        savename = "finewebedu"
+    elif args.version == "100Bedu":
+        hug_name = "HuggingFaceFW/fineweb-edu"
+        remote_name = "sample-100BT"
+        savename = "finewebedu"
     local_dir = "data"
 
     # create the cache the local directory if it doesn't exist yet
@@ -102,12 +97,6 @@ def main():
 
     # stream the dataset
     fw = load_dataset(hug_name, name=remote_name, split="train", streaming=True)
-    
-    # Shuffle if requested
-    if args.shuffle:
-        print(f"Shuffling dataset with seed {args.seed}")
-        random.seed(args.seed)
-        fw = fw.shuffle(seed=args.seed)
 
     # Load the tokenizer
     tokenizer_config = pickle.load(open(f"tokenizers/{args.tokenizer}", 'rb'))
