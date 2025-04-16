@@ -46,7 +46,7 @@ torchrun --nproc_per_node=G train_gpt.py --model_name ReadmeGPT --tokenizer read
 
 ## todos / planned features:
 - meta
-    - [ ] write a `contributing.md` to detail best practices for potential non-model code contributors
+    - [x] write a `contributing.md` to detail best practices for potential non-model code contributors
     - [ ] write a `how_to_experiment.md` to detail best practices for people looking to conduct scientifically robust experiments. explain things like:
         - [ ] how to calculate the compute, parameter, memory, etc differences of a given edit
         - [ ] when to hold compute vs parameters vs memory vs etc constant and when to let one vary
