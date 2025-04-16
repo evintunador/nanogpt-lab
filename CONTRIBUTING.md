@@ -1,4 +1,4 @@
-# Contributing to Modded NanoGPT
+# Contributing to GPT-Lab
 
 First off, thank you for considering contributing to this project! We appreciate your interest in helping improve the code of this repository. This guide outlines how you can contribute effectively.
 
