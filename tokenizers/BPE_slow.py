@@ -8,7 +8,10 @@ demo_tokenizer(TokenizerClass, demo_text) -> None (print to console)
 
 """
 import os
+import pickle
+from pathlib import Path
 
+from tqdm import tqdm
 import numpy as np
 import regex
 from datasets import Dataset
@@ -48,6 +51,29 @@ class TokenizerClass:
         self._decoder = {token: token_bytes for token_bytes, token in mergeable_ranks.items()}
         self._pat = regex.compile(pat_str)
 
+    def bpe_encode(self, mergeable_ranks: dict[bytes, int], input: bytes) -> list[int]:
+        parts = [bytes([b]) for b in input]
+        while True:
+            # Iterate over all pairs and find the pair we want to merge the most
+            min_idx = None
+            min_rank = None
+            for i, pair in enumerate(zip(parts[:-1], parts[1:])):
+                rank = mergeable_ranks.get(pair[0] + pair[1])
+                if rank is not None and (min_rank is None or rank < min_rank):
+                    min_idx = i
+                    min_rank = rank
+
+            # If there were no pairs we could merge, we're done!
+            if min_rank is None:
+                break
+            assert min_idx is not None
+
+            # Otherwise, merge that pair and leave the rest unchanged. Then repeat.
+            parts = parts[:min_idx] + [parts[min_idx] + parts[min_idx + 1]] + parts[min_idx + 2 :]
+
+        tokens = [mergeable_ranks[part] for part in parts]
+        return tokens
+
     def encode(self, text: str, demo: bool = False) -> list[int]:
         """Encodes a string into tokens.
 
@@ -60,7 +86,7 @@ class TokenizerClass:
         for word in words:
             # Turn each word into tokens, using the byte pair encoding algorithm
             word_bytes = word.encode("utf-8")
-            word_tokens = bpe_encode(self.mergeable_ranks, word_bytes, demo=demo)
+            word_tokens = self.bpe_encode(self.mergeable_ranks, word_bytes)
             tokens.extend(word_tokens)
         return tokens
 
@@ -155,9 +181,7 @@ def merge_ids(ids: list[list[int]], pair: tuple[int], idx: int):
     return new_ids
 
 
-def bpe_train(
-    data: str, vocab_size: int, pat_str: str, demo: bool = False, k: int = 256
-) -> dict[bytes, int]:
+def bpe_train(data: str, vocab_size: int, pat_str: str) -> dict[bytes, int]:
     # First, add tokens for each individual byte value
     if vocab_size < 2**8:
         raise ValueError("vocab_size must be at least 256, so we can encode all bytes")
@@ -293,25 +317,51 @@ def fetch_fineweb_data(dataset, max_chars: int):
 
 def train_tokenizer(dataset: Dataset, tokenizer_config: dict) -> TokenizerClass:
     data = fetch_fineweb_data(dataset, max_chars=tokenizer_config['sample_size'])
-    
     mergeable_ranks = bpe_train(
         data=data, 
         vocab_size=tokenizer_config['vocab_size'], 
         pat_str=tokenizer_config['regex_pattern']
     )
-    enc = TokenizerClass(
+    izer = TokenizerClass(
         pat_str=tokenizer_config['regex_pattern'], 
         mergeable_ranks=mergeable_ranks
     )
-    
     # Test the tokenizer with a simple example
     test_str = f"hello world"
-    tokens = enc.encode(test_str)
-    # Verify encoding-decoding roundtrips correctly
-    decoded = enc.decode(tokens)
+    tokens = izer.encode(test_str)
+    decoded = izer.decode(tokens)
     assert decoded == test_str, f"Decoding failed: expected '{test_str}' but got '{decoded}'"
-    decoded_bytes = enc.decode_bytes(tokens)
+    decoded_bytes = izer.decode_bytes(tokens)
     assert decoded_bytes == test_str.encode('utf-8'), \
         f"Bytes decoding failed: expected {test_str.encode('utf-8')} but got {decoded_bytes}"
-    
-    return enc
+    return izer
+
+
+def save_tokenizer(tokenizer: TokenizerClass, save_dir: str | Path) -> None:
+    """Saves the tokenizer to a file."""
+    os.makedirs(save_dir, exist_ok=True)
+    filepath = os.path.join(save_dir, f"tokenizer.pkl")
+    with open(filepath, 'wb') as f:
+        pickle.dump(tokenizer, f)
+    print(f"Tokenizer saved to {filepath}")
+
+
+def load_tokenizer(save_dir: str | Path) -> TokenizerClass:
+    """Loads a tokenizer from a file."""
+    filepath = os.path.join(save_dir, f"tokenizer.pkl")
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"Tokenizer file not found: {filepath}")
+    with open(filepath, 'rb') as f:
+        tokenizer = pickle.load(f)
+    print(f"Tokenizer loaded from {filepath}")
+    return tokenizer
+
+
+def demo_tokenizer(tokenizer: TokenizerClass, demo_text: str) -> None:
+    """Demonstrates the tokenizer by visualizing tokenization of demo_text."""
+    print(f"Original text: {demo_text}")
+    tokens = tokenizer.encode(demo_text)
+    print(f"Encoded tokens: {tokens}")
+    token_bytes = tokenizer.decode_tokens_bytes(tokens)
+    print("Visualized tokens:")
+    visualise_tokens(token_bytes)

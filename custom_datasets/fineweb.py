@@ -1,9 +1,7 @@
-# python built-ins
 import os
 import random as r
-# pip installs
+
 from datasets import load_dataset
-# local imports
 
 """
 FineWeb dataset (for srs pretraining)

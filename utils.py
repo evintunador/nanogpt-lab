@@ -41,7 +41,7 @@ def import_from_nested_path(nested_folders, filename, items):
         return imported_items
                 
     except ImportError as e:
-        print(f"Failed to import module: {e}")
+       raise
 
 
 # a wrapper to force a given function to behave using a specified working directory rather than the current working directory
@@ -79,7 +79,7 @@ def run_in_directory(func, path, *args, **kwargs):
 class ProcessGroupManager:
     """from https://github.com/huggingface/picotron/blob/main/picotron/process_group_manager.py"""
     def __init__(self, tp_size, cp_size, pp_size, dp_size):
-        assert all(x == 1 for x in tp_size, cp_size, pp_size), f"tp, cp and pp are not yet supported"
+        assert all(x == 1 for x in (tp_size, cp_size, pp_size)), f"tp, cp and pp are not yet supported"
             # TODO remove this once they are
 
         self.global_rank = dist.get_rank()

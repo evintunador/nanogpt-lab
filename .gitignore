@@ -1,7 +1,6 @@
 __pycache__/
 venv/
 *.pt
-tokenizers/trained/BPE_readmetokenizer_v1000_n100000.pkl
-experiments/*_ReadmeGPT/
 scratch.py
-temp_files/
+temp_dir/
+**/temp_dir/
