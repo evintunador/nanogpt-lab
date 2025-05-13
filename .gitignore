@@ -1,8 +1,7 @@
-data/
-pylog124M/
 __pycache__/
 venv/
 *.pt
-tokenizers/readmetokenizer_v1000_n100000.pkl
+tokenizers/trained/BPE_readmetokenizer_v1000_n100000.pkl
 experiments/*_ReadmeGPT/
 scratch.py
+temp_files/

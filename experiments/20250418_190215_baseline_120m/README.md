@@ -1,1 +1,0 @@
-2x 4060 Ti 16gb each on 0.4bil tokens for $0.257/r

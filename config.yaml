@@ -1,0 +1,95 @@
+### GPT-Lab Configuration File
+# config objects marked as required are necessary for scripts in root folder
+# not-required config objects must be selected directly from the files that use them 
+# (config dictionary will be passed in)
+
+dataset:
+  ### Required for all datasets
+  filename: "fineweb.py"      # the .py file in datasets/ to import from
+  ### add/change/delete these arguments based on what your dataset requires
+  edu: True
+  shuffle: True
+  streaming: True
+
+tokenizer:
+  ### Required for all tokenizers
+  filename: "BPE.py"          # the .py file in tokenizers/ to import from
+  nickname: "mytokenizer"     # a name for this specific tokenizer being trained/referenced
+  vocab_size: 65_534          # vocabulary size excluding special tokens 
+                              # (can be less than what trained tokenizer file has available)
+  ### add/change/delete these arguments based on what yours requires
+  special_tokens: ["<|endoftext|>",]
+  regex_pattern: r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]++[\r\n]*|\s*[\r\n]|\s+(?!\S)|\s+"""               
+  k: 256                      # number of top-k options to communicate between GPUs
+  sample_size: 100_000_000    # number of characters from dataset to train on
+
+token_pre_cacher:
+  ### Required for all
+  dataset_filename: "fineweb.py"      # the .py file in datasets/ to import from
+  tokenizer_filename: "BPE.py"        # the .py file in tokenizers/ to import from
+  filename: "simple_eot.py"           # the .py file in token_pre_cacher/ to import from
+  ### add/change/delete these arguments based on what yours requires
+
+# Model Architecture
+model:
+  ### Required for all models
+  model: "SotAGPT"        # the .py file in models/ to import from
+  ### add/change/delete these arguments based on what your model requires
+  num_layers: 12          # Number of transformer blocks (must be even for skip connections)
+  num_heads: 6            # Number of attention heads
+  model_dim: 384          # Size of model embedding vectors
+  head_dim: null          # Size of attention heads (if null, defaults to model_dim // num_heads)
+  mlp_ratio: 4            # MLP hidden dimension is model_dim * mlp_ratio
+  num_val_emb: 2          # Number of value embeddings used at initial and final layers
+  train_seq_len: 8192     # Training sequence length (must be multiple of 128 for FlexAttention)
+  val_seq_len: 16384      # Validation sequence length (must be multiple of 128 for FlexAttention)
+  # Note: seq_len is actually batch_size * seq_len but each has dynamic length thanks to doc-causal mask
+
+# Training Configuration
+training_loop:
+  # Optimization parameters
+  val_steps: 10          # Number of steps to run validation for
+  train_steps: 20000     # Number of training steps to run
+  grad_acc_steps: 1      # Number of gradient accumulation steps per training step
+  cooldown_frac: 0.4     # Fraction of training spent cooling down the learning rate
+  
+  # Optimizer settings (not directly configurable via CLI in original code)
+  optimizers:
+    adam:
+      head_params_lr: 0.22
+      embed_params_lr: 0.6
+      scalar_params_lr: 0.04
+      betas: [0.8, 0.95]
+      eps: 1e-10
+    muon:
+      lr: 0.05
+      momentum: 0.95
+      nesterov: true
+      ns_steps: 5
+
+# Memory Optimization
+optimization:
+  use_fp8: false        # Experimental FP8 support for matrix multiplication (may improve performance on H100s)
+
+# Evaluation and Logging
+evaluation:
+  val_loss_every: 100   # How often to evaluate validation loss (0 for only at the end)
+  save_model: false     # Whether to save model checkpoints
+  
+  # Generation parameters for sample outputs
+  generation:
+    max_new_tokens: 100
+    temperature: 0.8
+    top_k: 200
+
+# Reproducibility
+reproducibility:
+  seed: null            # Random seed for initialization (null for random seed)
+
+# Hardware Configuration (automatically determined at runtime)
+hardware:
+  # defaults are setup for a big model on an 8-GPU node
+  dp_size: 1    # number of splits to make for data-parallelism
+  tp_size: 2    # number of splits to make for tensor-parallelism
+  pp_size: 2    # number of splits to make for pipeline-parallelism
+  cp_size: 2    # number of splits to make for context-parallelism
