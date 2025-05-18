@@ -1,11 +1,16 @@
 """
 API MUST CONTAIN:
-train_tokenizer(datasets.Dataset, tokenizer_config: dict) -> TokenizerClass:
-save_tokenizer(TokenizerClass, tokenizer_config: dict) -> None:
-load_tokenizer(tokenizer_config: dict) -> TokenizerClass:
-demo_tokenizer(TokenizerClass, demo_text) -> None (print to console)
+class TokenizerClass:
+    @staticmethod
+    def train(dataset: datasets.Dataset, tokenizer_config: dict) -> TokenizerClass:
+    def __init__(config: dict):
+    def encode(self, text: str) -> List[int]:
+    def decode(self, tokens: List[int]) -> str: 
+    
+pretokenize_data(tokenizer: TokenizerClass, text: str) -> None:
 
-
+Built off the Tiktoken educational implementation 
+https://github.com/openai/tiktoken/blob/main/tiktoken/_educational.py
 """
 import os
 import pickle
@@ -45,11 +50,10 @@ class TokenizerClass:
         """Creates an Encoding object."""
         # A regex pattern string that is used to split the input text
         self.pat_str = pat_str
+        self._pat = regex.compile(pat_str)
         # A dictionary mapping token bytes to their ranks. The ranks correspond to merge priority
         self.mergeable_ranks = mergeable_ranks
-
         self._decoder = {token: token_bytes for token_bytes, token in mergeable_ranks.items()}
-        self._pat = regex.compile(pat_str)
 
     def bpe_encode(self, mergeable_ranks: dict[bytes, int], input: bytes) -> list[int]:
         parts = [bytes([b]) for b in input]
@@ -316,14 +320,21 @@ def fetch_fineweb_data(dataset, max_chars: int):
 
 
 def train_tokenizer(dataset: Dataset, tokenizer_config: dict) -> TokenizerClass:
-    data = fetch_fineweb_data(dataset, max_chars=tokenizer_config['sample_size'])
+    data = fetch_fineweb_data(
+        dataset, 
+        max_chars=tokenizer_config.get('sample_size', 10_000)
+    )
+    pat_str = tokenizer_config.get(
+        'regex_pattern', 
+        r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]++[\r\n]*|\s*[\r\n]|\s+(?!\S)|\s+"""
+    )
     mergeable_ranks = bpe_train(
         data=data, 
-        vocab_size=tokenizer_config['vocab_size'], 
-        pat_str=tokenizer_config['regex_pattern']
+        vocab_size=tokenizer_config.get('vocab_size', 1000), 
+        pat_str=pat_str
     )
     izer = TokenizerClass(
-        pat_str=tokenizer_config['regex_pattern'], 
+        pat_str=pat_str, 
         mergeable_ranks=mergeable_ranks
     )
     # Test the tokenizer with a simple example
@@ -335,15 +346,6 @@ def train_tokenizer(dataset: Dataset, tokenizer_config: dict) -> TokenizerClass:
     assert decoded_bytes == test_str.encode('utf-8'), \
         f"Bytes decoding failed: expected {test_str.encode('utf-8')} but got {decoded_bytes}"
     return izer
-
-
-def save_tokenizer(tokenizer: TokenizerClass, save_dir: str | Path) -> None:
-    """Saves the tokenizer to a file."""
-    os.makedirs(save_dir, exist_ok=True)
-    filepath = os.path.join(save_dir, f"tokenizer.pkl")
-    with open(filepath, 'wb') as f:
-        pickle.dump(tokenizer, f)
-    print(f"Tokenizer saved to {filepath}")
 
 
 def load_tokenizer(save_dir: str | Path) -> TokenizerClass:
@@ -365,3 +367,14 @@ def demo_tokenizer(tokenizer: TokenizerClass, demo_text: str) -> None:
     token_bytes = tokenizer.decode_tokens_bytes(tokens)
     print("Visualized tokens:")
     visualise_tokens(token_bytes)
+
+
+def pretokenize_doc(doc: str, tokenizer: TokenizerClass) -> np.array:
+    eot = tokenizer.special_tokens['<|endoftext|>']
+    tokens = [eot]
+    tokens.extend(tokenizer.encode(doc['text']))
+    tokens_np = np.array(tokens)
+    assert (0 <= tokens_np).all()
+    if tokenizer.vocab_size <= 2**16:
+        assert tokens_np < 2**16
+

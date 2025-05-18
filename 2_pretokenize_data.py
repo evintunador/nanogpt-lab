@@ -1,32 +1,24 @@
 """
-FineWeb dataset (for srs pretraining)
-https://huggingface.co/datasets/HuggingFaceFW/fineweb
-
-example doc to highlight the structure of the dataset:
-{
-  "text": "Posted by mattsmith on 20th April 2012\nStraight from...",
-  "id": "<urn:uuid:d853d453-196e-4488-a411-efc2b26c40d2>",
-  "dump": "CC-MAIN-2013-20",
-  "url": "http://nleastchatter.com/philliesphandom/tag/freddy-galvis/",
-  "date": "2013-05-18T07:24:47Z",
-  "file_path": "s3://commoncrawl/long.../path.../file.gz",
-  "language": "en",
-  "language_score": 0.9185474514961243,
-  "token_count": 594
-}
+the purpose of this file is to use your chosen custom_dataset/, tokenizer/,
+and pretokenizer_rules/ to do as much pre-processing of your dataset as possible
+before the actual LLM training in order to minimize the time that the GPU must wait
+while the CPU prepares data for it. this means pre-tokenizing the dataset and using 
+numpy to save the token indices to .bin files which read at C speeds rather than
+Python speeds
 """
 import os
 import argparse
 import multiprocessing as mp
-import numpy as np
-import tiktoken
-from datasets import load_dataset
-from tqdm import tqdm
-import argparse
-import numpy as np
 import pickle
 from functools import partial
 import random
+
+import tiktoken
+from tqdm import tqdm
+import numpy as np
+
+from custom_datasets import load_dataset
+
 
 def write_datafile(filename, toks):
     """ 

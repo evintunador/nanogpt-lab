@@ -19,7 +19,7 @@ import yaml
 from tqdm import tqdm
 import regex
 import numpy as np
-from datasets import load_dataset
+from custom_datasets import load_dataset
 import tiktoken
 import torch
 import torch.distributed as dist

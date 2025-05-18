@@ -15,13 +15,13 @@ tokenizer:
   ### Required for all tokenizers
   filename: "BPE_slow"          # the .py file in tokenizers/ to import from
   nickname: "test"     # a name for this specific tokenizer being trained/referenced
-  vocab_size: 1000          # vocabulary size excluding special tokens 
-                              # (can be less than what trained tokenizer file has available)
   ### add/change/delete these arguments based on what yours requires
-  special_tokens: ["<|endoftext|>",]
-  regex_pattern: r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]++[\r\n]*|\s*[\r\n]|\s+(?!\S)|\s+"""               
-  #k: 256                      # number of top-k options to communicate between GPUs
+  vocab_size: 1000      # vocabulary size excluding special tokens (can be less than 
+                        # what an already trained tokenizer file has available)
   sample_size: 10_000    # number of characters from dataset to train on
+  regex_pattern: r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]++[\r\n]*|\s*[\r\n]|\s+(?!\S)|\s+"""               
+  special_tokens: ["<|endoftext|>",]
+  #k: 256               # number of top-k options to communicate between GPUs
 
 token_pre_cacher:
   ### Required for all

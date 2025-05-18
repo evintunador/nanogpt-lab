@@ -41,7 +41,7 @@ def import_from_nested_path(nested_folders, filename, items):
         return imported_items
                 
     except ImportError as e:
-       raise
+       raise e
 
 
 # a wrapper to force a given function to behave using a specified working directory rather than the current working directory

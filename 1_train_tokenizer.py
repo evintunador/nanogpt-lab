@@ -1,5 +1,6 @@
 import os
 import yaml
+import pickle
 
 from utils import import_from_nested_path
 
@@ -18,21 +19,29 @@ get_dataset = imported_dataset_items['get_dataset']
 imported_tokenizer_items = import_from_nested_path(
     nested_folders=['tokenizers'], 
     filename=tokenizer_config['filename'], 
-    items=['train_tokenizer', 'demo_tokenizer', 'save_tokenizer', 'load_tokenizer']
+    items=['train_tokenizer', 'demo_tokenizer', 'load_tokenizer']
 )
 train_tokenizer = imported_tokenizer_items['train_tokenizer']
 demo_tokenizer = imported_tokenizer_items['demo_tokenizer']
-save_tokenizer = imported_tokenizer_items['save_tokenizer']
 load_tokenizer = imported_tokenizer_items['load_tokenizer']
 
 dataloader = get_dataset(dataset_config)
 tokenizer = train_tokenizer(dataloader, tokenizer_config)
 
-save_dir = os.path.join(
-    os.path.dirname(__file__), 
-    f"tokenizers/trained/{tokenizer_config['filename']}_{tokenizer_config['nickname']}"
+def save_tokenizer(filename: str, nickname: str)
+    save_dir = os.path.join(
+        os.path.dirname(__file__), 
+        f"tokenizers/trained/{filename}_{nickname}"
+    )
+    os.makedirs(save_dir, exist_ok=True)
+    filepath = os.path.join(save_dir, f"tokenizer.pkl")
+    with open(filepath, 'wb') as f:
+        pickle.dump(tokenizer, f)
+    print(f"Tokenizer saved to {filepath}")
+save_tokenizer(
+    filename=tokenizer_config['filename'],
+    nickname=tokenizer_config['nickname']
 )
-save_tokenizer(tokenizer, save_dir)
 
 tokenizer = load_tokenizer(save_dir)
 demo_text = "The quick brown fox jumps over the lazy dog."
