@@ -17,7 +17,7 @@ import tiktoken
 from tqdm import tqdm
 import numpy as np
 
-from custom_datasets import load_dataset
+from data_sources import load_dataset
 
 
 def write_datafile(filename, toks):

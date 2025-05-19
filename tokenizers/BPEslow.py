@@ -1,15 +1,24 @@
 """
-API MUST CONTAIN:
-class TokenizerClass:
+YOUR API MUST CONTAIN:
+class Tokenizer:
     @staticmethod
-    def train(dataset: datasets.Dataset, tokenizer_config: dict) -> TokenizerClass:
+    def train(dataset: datasets.Dataset, tokenizer_config: dict) -> Tokenizer:
+        # trains a tokenizer (if applicable) and returns it
     def __init__(config: dict):
-    def encode(self, text: str) -> List[int]:
-    def decode(self, tokens: List[int]) -> str: 
-    
-pretokenize_data(tokenizer: TokenizerClass, text: str) -> None:
+        # the only two project-wide required config arguments are 'filename' and 'nickname'
+    def enc(self, text: str) -> List[int]:
+        # converts a python string to a list of positive integer token indices
+    def dec(self, tokens: List[int]) -> str: 
+        # converts a list of positive integer token indices to a string
+    def enc_bytes(self, text: bytes) -> List[int]:
+        # convert utf-8 bytes to a list of positive integer token indices
+    def dec_bytes(self, List[int]) -> List[bytes]:
+        # convert a list of positive integer token indices to a list of utf-8 bytes
+pretokenize_data(tokenizer: Tokenizer, text: str) -> None:
+    # A scheme for how to tokenize and store a full document when caching
+    # This usually relates to use of special tokens
 
-Built off the Tiktoken educational implementation 
+This specific example tokenizer is built off the Tiktoken educational implementation 
 https://github.com/openai/tiktoken/blob/main/tiktoken/_educational.py
 """
 import os
@@ -21,114 +30,12 @@ import numpy as np
 import regex
 from datasets import Dataset
 
+from utils import visualise_tokens
 
-def visualise_tokens(token_values: list[bytes]) -> None:
-    background = [f"\u001b[48;5;{i}m" for i in [167, 179, 185, 77, 80, 68, 134]]
-    # If token boundaries do not occur at unicode character boundaries, it's unclear how best to
-    # demo the token. Here, we'll just use the unicode replacement character to represent some
-    # fraction of a character.
-    unicode_token_values = [x.decode("utf-8", errors="replace") for x in token_values]
+# set __test__ to False for any file in tokenizers/ that should not be tested
+# (AKA purposely does not meet API requierments)
+__test__ = True
 
-    running_length = 0
-    last_color = None
-    for token in unicode_token_values:
-        color = background[running_length % len(background)]
-        if color == last_color:
-            color = background[(running_length + 1) % len(background)]
-            assert color != last_color
-        last_color = color
-        running_length += len(token)
-        print(color + token, end="")
-    print("\u001b[0m")
-
-
-class TokenizerClass:
-    """
-    A simple tokenizer class written in Python.
-    """
-    def __init__(self, *, pat_str: str, mergeable_ranks: dict[bytes, int]) -> None:
-        """Creates an Encoding object."""
-        # A regex pattern string that is used to split the input text
-        self.pat_str = pat_str
-        self._pat = regex.compile(pat_str)
-        # A dictionary mapping token bytes to their ranks. The ranks correspond to merge priority
-        self.mergeable_ranks = mergeable_ranks
-        self._decoder = {token: token_bytes for token_bytes, token in mergeable_ranks.items()}
-
-    def bpe_encode(self, mergeable_ranks: dict[bytes, int], input: bytes) -> list[int]:
-        parts = [bytes([b]) for b in input]
-        while True:
-            # Iterate over all pairs and find the pair we want to merge the most
-            min_idx = None
-            min_rank = None
-            for i, pair in enumerate(zip(parts[:-1], parts[1:])):
-                rank = mergeable_ranks.get(pair[0] + pair[1])
-                if rank is not None and (min_rank is None or rank < min_rank):
-                    min_idx = i
-                    min_rank = rank
-
-            # If there were no pairs we could merge, we're done!
-            if min_rank is None:
-                break
-            assert min_idx is not None
-
-            # Otherwise, merge that pair and leave the rest unchanged. Then repeat.
-            parts = parts[:min_idx] + [parts[min_idx] + parts[min_idx + 1]] + parts[min_idx + 2 :]
-
-        tokens = [mergeable_ranks[part] for part in parts]
-        return tokens
-
-    def encode(self, text: str, demo: bool = False) -> list[int]:
-        """Encodes a string into tokens.
-
-        >>> enc.encode("hello world")
-        [388, 372]
-        """
-        # Use the regex to split the text into (approximately) words
-        words = self._pat.findall(text)
-        tokens = []
-        for word in words:
-            # Turn each word into tokens, using the byte pair encoding algorithm
-            word_bytes = word.encode("utf-8")
-            word_tokens = self.bpe_encode(self.mergeable_ranks, word_bytes)
-            tokens.extend(word_tokens)
-        return tokens
-
-    def decode_bytes(self, tokens: list[int]) -> bytes:
-        """Decodes a list of tokens into bytes.
-
-        >>> enc.decode_bytes([388, 372])
-        b'hello world'
-        """
-        return b"".join(self._decoder[token] for token in tokens)
-
-    def decode(self, tokens: list[int]) -> str:
-        """Decodes a list of tokens into a string.
-
-        Decoded bytes are not guaranteed to be valid UTF-8. In that case, we replace
-        the invalid bytes with the replacement character "�".
-
-        >>> enc.decode([388, 372])
-        'hello world'
-        """
-        return self.decode_bytes(tokens).decode("utf-8", errors="replace")
-
-    def decode_tokens_bytes(self, tokens: list[int]) -> list[bytes]:
-        """Decodes a list of tokens into a list of bytes.
-
-        Useful for visualising how a string is tokenised.
-
-        >>> enc.decode_tokens_bytes([388, 372])
-        [b'hello', b' world']
-        """
-        return [self._decoder[token] for token in tokens]
-    
-    def enc(self, text: str, demo: bool = False) -> list[int]:
-        return self.encode(text=text, demo=demo)
-    
-    def dec(self, tokens: list[int]) -> str:
-        return self.decode(tokens=tokens)
-    
 
 def merge_bytes(words, most_common_pair, token_bytes):
     new_words = []
@@ -319,57 +226,129 @@ def fetch_fineweb_data(dataset, max_chars: int):
     return final_text
 
 
-def train_tokenizer(dataset: Dataset, tokenizer_config: dict) -> TokenizerClass:
-    data = fetch_fineweb_data(
-        dataset, 
-        max_chars=tokenizer_config.get('sample_size', 10_000)
-    )
-    pat_str = tokenizer_config.get(
-        'regex_pattern', 
-        r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]++[\r\n]*|\s*[\r\n]|\s+(?!\S)|\s+"""
-    )
-    mergeable_ranks = bpe_train(
-        data=data, 
-        vocab_size=tokenizer_config.get('vocab_size', 1000), 
-        pat_str=pat_str
-    )
-    izer = TokenizerClass(
-        pat_str=pat_str, 
-        mergeable_ranks=mergeable_ranks
-    )
-    # Test the tokenizer with a simple example
-    test_str = f"hello world"
-    tokens = izer.encode(test_str)
-    decoded = izer.decode(tokens)
-    assert decoded == test_str, f"Decoding failed: expected '{test_str}' but got '{decoded}'"
-    decoded_bytes = izer.decode_bytes(tokens)
-    assert decoded_bytes == test_str.encode('utf-8'), \
-        f"Bytes decoding failed: expected {test_str.encode('utf-8')} but got {decoded_bytes}"
-    return izer
+class Tokenizer:
+    @staticmethod
+    def train(dataset: Dataset, tokenizer_config: dict):
+        data = fetch_fineweb_data(
+            dataset, 
+            max_chars=tokenizer_config.get('sample_size', 10_000)
+        )
+        pat_str = tokenizer_config.get(
+            'regex_pattern', 
+            r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]++[\r\n]*|\s*[\r\n]|\s+(?!\S)|\s+"""
+        )
+        mergeable_ranks = bpe_train(
+            data=data, 
+            vocab_size=tokenizer_config.get('vocab_size', 1000), 
+            pat_str=pat_str
+        )
+        izer = Tokenizer(
+            pat_str=pat_str, 
+            mergeable_ranks=mergeable_ranks
+        )
+        # Test the tokenizer with a simple example
+        test_str = f"hello world"
+        tokens = izer.encode(test_str)
+        decoded = izer.decode(tokens)
+        assert decoded == test_str, f"Decoding failed: expected '{test_str}' but got '{decoded}'"
+        decoded_bytes = izer.decode_bytes(tokens)
+        assert decoded_bytes == test_str.encode('utf-8'), \
+            f"Bytes decoding failed: expected {test_str.encode('utf-8')} but got {decoded_bytes}"
+        return izer
 
+    def __init__(self, *, pat_str: str, mergeable_ranks: dict[bytes, int]) -> None:
+        """Creates an Encoding object."""
+        # A regex pattern string that is used to split the input text
+        self.pat_str = pat_str
+        self._pat = regex.compile(pat_str)
+        # A dictionary mapping token bytes to their ranks. The ranks correspond to merge priority
+        self.mergeable_ranks = mergeable_ranks
+        self._encoder = {token_bytes: token for token_bytes, token in mergeable_ranks.items()}
+        self._decoder = {token: token_bytes for token_bytes, token in mergeable_ranks.items()}
 
-def load_tokenizer(save_dir: str | Path) -> TokenizerClass:
-    """Loads a tokenizer from a file."""
-    filepath = os.path.join(save_dir, f"tokenizer.pkl")
-    if not os.path.exists(filepath):
-        raise FileNotFoundError(f"Tokenizer file not found: {filepath}")
-    with open(filepath, 'rb') as f:
-        tokenizer = pickle.load(f)
-    print(f"Tokenizer loaded from {filepath}")
-    return tokenizer
+    def bpe_encode(self, mergeable_ranks: dict[bytes, int], input: bytes) -> list[int]:
+        parts = [bytes([b]) for b in input]
+        while True:
+            # Iterate over all pairs and find the pair we want to merge the most
+            min_idx = None
+            min_rank = None
+            for i, pair in enumerate(zip(parts[:-1], parts[1:])):
+                rank = mergeable_ranks.get(pair[0] + pair[1])
+                if rank is not None and (min_rank is None or rank < min_rank):
+                    min_idx = i
+                    min_rank = rank
 
+            # If there were no pairs we could merge, we're done!
+            if min_rank is None:
+                break
+            assert min_idx is not None
 
-def demo_tokenizer(tokenizer: TokenizerClass, demo_text: str) -> None:
-    """Demonstrates the tokenizer by visualizing tokenization of demo_text."""
-    print(f"Original text: {demo_text}")
-    tokens = tokenizer.encode(demo_text)
-    print(f"Encoded tokens: {tokens}")
-    token_bytes = tokenizer.decode_tokens_bytes(tokens)
-    print("Visualized tokens:")
-    visualise_tokens(token_bytes)
+            # Otherwise, merge that pair and leave the rest unchanged. Then repeat.
+            parts = parts[:min_idx] + [parts[min_idx] + parts[min_idx + 1]] + parts[min_idx + 2 :]
 
+        tokens = [mergeable_ranks[part] for part in parts]
+        return tokens
 
-def pretokenize_doc(doc: str, tokenizer: TokenizerClass) -> np.array:
+    def encode(self, text: str, demo: bool = False) -> list[int]:
+        """Encodes a string into tokens.
+
+        >>> enc.encode("hello world")
+        [388, 372]
+        """
+        # Use the regex to split the text into (approximately) words
+        words = self._pat.findall(text)
+        tokens = []
+        for word in words:
+            # Turn each word into tokens, using the byte pair encoding algorithm
+            word_bytes = word.encode("utf-8")
+            word_tokens = self.bpe_encode(self.mergeable_ranks, word_bytes)
+            tokens.extend(word_tokens)
+        return tokens
+
+    def decode_bytes(self, tokens: list[int]) -> bytes:
+        """Decodes a list of tokens into bytes.
+
+        >>> enc.decode_bytes([388, 372])
+        b'hello world'
+        """
+        return b"".join(self._decoder[token] for token in tokens)
+
+    def decode(self, tokens: list[int]) -> str:
+        """Decodes a list of tokens into a string.
+
+        Decoded bytes are not guaranteed to be valid UTF-8. In that case, we replace
+        the invalid bytes with the replacement character "�".
+
+        >>> enc.decode([388, 372])
+        'hello world'
+        """
+        return self.decode_bytes(tokens).decode("utf-8", errors="replace")
+
+    def decode_tokens_bytes(self, tokens: list[int]) -> list[bytes]:
+        """Decodes a list of tokens into a list of bytes.
+
+        Useful for visualising how a string is tokenised.
+
+        >>> enc.decode_tokens_bytes([388, 372])
+        [b'hello', b' world']
+        """
+        return [self._decoder[token] for token in tokens]
+    
+    def enc(self, text: str, demo: bool = False) -> list[int]:
+        return self.encode(text=text, demo=demo)
+    
+    def dec(self, tokens: list[int]) -> str:
+        return self.decode(tokens=tokens)
+    
+    def enc_bytes(self, text: bytes) -> list[int]:
+        """Converts a bytes object to a list of positive integer token indices."""
+        return [self._encoder[byte] for byte in text]
+
+    def dec_bytes(self, tokens: list[int]) -> list[bytes]:
+        """Converts a list of positive integer token indices to a list of bytes."""
+        return [self._decoder[token] for token in tokens]
+
+def pretokenize_doc(doc: str, tokenizer: Tokenizer) -> np.array:
     eot = tokenizer.special_tokens['<|endoftext|>']
     tokens = [eot]
     tokens.extend(tokenizer.encode(doc['text']))

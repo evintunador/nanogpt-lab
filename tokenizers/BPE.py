@@ -19,11 +19,15 @@ import yaml
 from tqdm import tqdm
 import regex
 import numpy as np
-from custom_datasets import load_dataset
+from datasets import load_dataset
 import tiktoken
 import torch
 import torch.distributed as dist
 from datasets.distributed import split_dataset_by_node
+
+# set __test__ to False for any file in tokenizers/ that should not be tested
+# (AKA purposely does not meet API requierments)
+__test__ = False
 
 # Check if environment variables are set by torchrun, otherwise default to single GPU
 if "RANK" in os.environ and "WORLD_SIZE" in os.environ and "LOCAL_RANK" in os.environ:

@@ -2,50 +2,56 @@ import os
 import yaml
 import pickle
 
-from utils import import_from_nested_path
+from utils import import_from_nested_path, visualise_tokens
 
+# open configs
 with open('config.yaml', 'r') as file:
     config = yaml.safe_load(file)
-dataset_config = config.get('dataset', {})
-tokenizer_config = config.get('tokenizer', {})
+dataset_cfg = config.get('dataset', {})
+tok_cfg = config.get('tokenizer', {})
 
+# fetch custom dataset
 imported_dataset_items = import_from_nested_path(
-    nested_folders=['custom_datasets'],
-    filename=dataset_config['filename'],
+    nested_folders=['data_sources'],
+    filename=dataset_cfg['filename'],
     items=['get_dataset']
 )
 get_dataset = imported_dataset_items['get_dataset']
+dataset = get_dataset(dataset_cfg)
+try:
+    iterator = iter(dataset)
+except TypeError:
+    raise AssertionError("Dataset is not iterable")
+first_item = next(iterator)
+assert 'text' in first_item, "Dataset items do not contain 'text' key"
 
+# fetch and train custom tokenizer
 imported_tokenizer_items = import_from_nested_path(
     nested_folders=['tokenizers'], 
-    filename=tokenizer_config['filename'], 
-    items=['train_tokenizer', 'demo_tokenizer', 'load_tokenizer']
+    filename=tok_cfg['filename'], 
+    items=['Tokenizer']
 )
-train_tokenizer = imported_tokenizer_items['train_tokenizer']
-demo_tokenizer = imported_tokenizer_items['demo_tokenizer']
-load_tokenizer = imported_tokenizer_items['load_tokenizer']
+Tokenizer = imported_tokenizer_items['Tokenizer']
+tokenizer = Tokenizer.train(dataset, tok_cfg)
 
-dataloader = get_dataset(dataset_config)
-tokenizer = train_tokenizer(dataloader, tokenizer_config)
-
-def save_tokenizer(filename: str, nickname: str)
-    save_dir = os.path.join(
-        os.path.dirname(__file__), 
-        f"tokenizers/trained/{filename}_{nickname}"
-    )
-    os.makedirs(save_dir, exist_ok=True)
-    filepath = os.path.join(save_dir, f"tokenizer.pkl")
-    with open(filepath, 'wb') as f:
-        pickle.dump(tokenizer, f)
-    print(f"Tokenizer saved to {filepath}")
-save_tokenizer(
-    filename=tokenizer_config['filename'],
-    nickname=tokenizer_config['nickname']
+# save the newly trained tokenizer
+save_dir = os.path.join(
+    os.path.dirname(__file__), 
+    f"tokenizers/trained/{tok_cfg['filename']}_{tok_cfg['nickname']}"
 )
+os.makedirs(save_dir, exist_ok=True)
+filepath = os.path.join(save_dir, f"tokenizer.pkl")
+with open(filepath, 'wb') as f:
+    pickle.dump(tokenizer, f)
+print(f"Tokenizer saved to {filepath}")
 
-tokenizer = load_tokenizer(save_dir)
+# test and demo the tokenizer
 demo_text = "The quick brown fox jumps over the lazy dog."
 assert tokenizer.dec(tokenizer.enc(demo_text)) == demo_text
-demo_tokenizer(tokenizer, demo_text)
+demo_bytes = demo_text.encode("utf-8")
+assert tokenizer.dec_bytes(tokenizer.enc_bytes(demo_bytes)) == demo_bytes
+visualise_tokens([tokenizer.dec_bytes([b]).encode("utf-8", errors="replace") 
+                  if isinstance(b, int) else b 
+                  for b in tokenizer.enc_bytes(demo_bytes)])
 
 # TODO: logs for replications and whatever, save to same folder as tokenizer

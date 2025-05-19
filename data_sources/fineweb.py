@@ -1,10 +1,23 @@
+"""
+API MUST CONTAIN:
+get_dataset(dataset_config, split, seed) -> datasets.Dataset:
+
+and the datasets.Dataset should be useable like
+item = next(dataset)['text']
+for getting the raw text, with other optional dict keys
+being for metadata
+"""
 import os
 import random as r
 
 from datasets import load_dataset
 
+# set __test__ to False for any file in tokenizers/ that should not be tested
+# (AKA purposely does not meet API requierments)
+__test__ = True
+
 """
-FineWeb dataset (for srs pretraining)
+FineWeb dataset
 https://huggingface.co/datasets/HuggingFaceFW/fineweb
 
 example doc to highlight the structure of the dataset:
@@ -20,12 +33,18 @@ example doc to highlight the structure of the dataset:
   "token_count": 594
 }
 """
+default_cfg = {
+    'streaming': True,
+    'shuffle': False,
+    'edu': False
+}
 
 def get_dataset(
-        cfg, 
+        cfg: dict, 
         split: str = 'train',
         seed: int = r.randint(0, 2**32 - 1)
     ):
+    cfg = {**default_cfg, **cfg}
     fw = load_dataset(
         "HuggingFaceFW/fineweb" + ("-edu" if cfg['edu'] else ""), 
         name=f"sample-350BT", 
