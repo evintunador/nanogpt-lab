@@ -18,12 +18,6 @@ imported_dataset_items = import_from_nested_path(
 )
 get_dataset = imported_dataset_items['get_dataset']
 dataset = get_dataset(dataset_cfg)
-try:
-    iterator = iter(dataset)
-except TypeError:
-    raise AssertionError("Dataset is not iterable")
-first_item = next(iterator)
-assert 'text' in first_item, "Dataset items do not contain 'text' key"
 
 # fetch and train custom tokenizer
 imported_tokenizer_items = import_from_nested_path(

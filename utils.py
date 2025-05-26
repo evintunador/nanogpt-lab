@@ -73,6 +73,26 @@ def run_in_directory(func, path, *args, **kwargs):
 
 
 ###########################################################
+########### Serialization/Deserialization ##################
+###########################################################
+
+
+YamlJsonSafeType = Union[str, int, float, bool, None, List["YamlJsonSafeType"], Dict[str, "YamlJsonSafeType"]]
+
+def yaml_dump(data: YamlJsonSafeType, file: TextIO, **kwargs) -> None:
+    """
+    Dump data to a YAML file.
+
+    Args:
+        data (YamlJsonSafeType): The data to dump.
+        file (TextIO): The file object to write to.
+        **kwargs: Additional keyword arguments to pass to the `yaml.dump` function.
+
+    Example:
+    """
+
+
+###########################################################
 ###################### 4D PARALLELISM ##################
 ###########################################################
 

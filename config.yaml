@@ -7,9 +7,12 @@ dataset:
   ### Required for all datasets
   filename: "fineweb"           # the .py file in datasets/ to import from
   ### add/change/delete these arguments based on what yours requires
+  split: 'train'
+  sample: 'sample-350BT'
   edu: True
   shuffle: True
   streaming: True
+  seed: 42
 
 tokenizer:
   ### Required for all tokenizers
