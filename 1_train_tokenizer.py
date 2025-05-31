@@ -12,7 +12,7 @@ tok_cfg = config.get('tokenizer', {})
 
 # fetch custom dataset
 imported_dataset_items = import_from_nested_path(
-    nested_folders=['data_sources'],
+    nested_folders=['data'],
     filename=dataset_cfg['filename'],
     items=['get_dataset']
 )

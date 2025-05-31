@@ -16,7 +16,7 @@ def check_testable(filename):
     """Checks if a dataset module is marked as testable (i.e., __test__ is not False)."""
     try:
         imported_items = import_from_nested_path(
-            nested_folders=['data_sources'],
+            nested_folders=['data'],
             filename=filename,
             items=['__test__']
         )
@@ -38,14 +38,14 @@ def test_dataset_api(dataset_filename):
     4. Asserts that dataset items are dictionaries containing a 'text' key with a string value.
     """
     imported_items = import_from_nested_path(
-        nested_folders=['data_sources'],
+        nested_folders=['data'],
         filename=dataset_filename,
         items=['__config_name__', '__datasource_name__']
     )
     config_name = imported_items.get('__config_name__')
     datasource_name = imported_items.get('__datasource_name__')
     imported_items = import_from_nested_path(
-        nested_folders=['data_sources'],
+        nested_folders=['data'],
         filename=dataset_filename,
         items=[config_name, datasource_name]
     )
