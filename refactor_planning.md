@@ -2,12 +2,14 @@
 previous versions were very single python script on single machine with no abstraction, not modular, no tests, etc
 the goal is to setup abstract base classes, a strict typing system, and a modular pipeline that is flexible to training not quite arbitrary models but somewhat close to it
 
+# PLANNING
 ### What needs to be abstract versus what limitations can we assume?
 - *file storage* - assume local directory using git-lfs
-### *SerDes*
+### *SerDes/Logging*
 - EVERYTHING has a `.save_to_dir(self, dir: str) -> None` and `.load_from_dir(cls, dir: str) -> cls`
-- not only should the data be saved, but also the currently running python file as a .txt
-    - when loading, we should check that the saved .txt backup is equal to the current file doing the loading
+    - this generally calls recursively on all submodules
+- also save the currently running root python file as a .txt inside this root `/experiments/YYYYMMDD_HHMMSS/`
+- when loading, we should assert that the saved .txt backup is equal to the current file doing the loading
 ### *DATA TYPES* 
 - keep it abstract with strict typing so that we know what inputs & outputs each module accepts
 - all modules specify datatype input & output for every single method they have
@@ -43,15 +45,24 @@ the goal is to setup abstract base classes, a strict typing system, and a modula
     - `.train(self) -> ModelCls`
         - `.train_input_type(self) -> CustomDataType:` and `.train_output_type(self) -> CustomDataType`  
 ### *BENCHMARKS* 
-- take in a model with compatible `.forward` (or `.inference`?) types and output a metric
-    - are metrics a custom datatype? 
-    - do we save a given metric of all models to the same place in some leaderboard?
-        - a shared storage place? do we save benchmark results with a model or with a benchmark?
-- required methods:
-    - `.`
+- data for benchmarking must come in the form of a data source (eg. `HellaSwagDataSourceCls`)
+- a benchmark module itself takes in a data source and a model and just handles the computation of the metric on the data (eg. `MultipleChoiceLogitsBenchmark`, `CorrectAnswerInTopK`, `SmarterLLMGrader`, etc)
+- tbh we can just keep a helper method and some csv's somewhere for leaderboards
+- no need to SerDes a specific instance of a benchmark; honestly everything can be static methods just organized or not even a class
+- i suppose all benchmarks must be compatible with a model's `.forward` method? or optionally `.inference` method?
+- required_methods:
+    - `.calculate(self, data: DataSource, model: Model) -> CustomDataVal`
+    - `.add_to_leaderboard`
+- i feel like we have enough of the puzzle pieces ironed out that i can ignore benchmark design for now
+### *TESTING*
+- everyone's custom modules inherit from one of our ABCs and we first assert that and that they have the right abstractmethods
+- test file loops through files in its directory using `__test__: bool` and `__test_name__: str` to let the tests know whether & what to test
+- a given test file creates a mock data source, model, etc with the desired types from `.?_input_type()` and `.?_output_type()` which can likely be global fixtures
 
 
-# for DAGSeq2DAGSeq what we do is
+
+
+## for DAGSeq2DAGSeq what we do is
 1. download wikipedia dump, parse it, save each file to the same folder with titles as filenames and titles at beginning of doc
 2. create DataSource object that for a __get_item__(self, idx=i) call reads off from the files using indexing from alphabetical order and once that file is read from disc it 
     1. tokenizes it and count number of tokens in this doc (and keeps track of total count)
@@ -64,65 +75,4 @@ the goal is to setup abstract base classes, a strict typing system, and a modula
 3. save each of those np.ndarrays into their own bin file? or back-to-back in big bin files? 
     - the former would ensure a continuous chosen graph in a single batch, which means more "complete" graphs to be trained on less data diversity, and potentially some overhead from beginning reads on new bin files
 4. the `.get_data_generator()` method reads from bin files to provide the next iteration
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#
-#
-#
-#
-#
-#
-
-##
-
-#
-#
-#
-#
-#
-#
-
-#
-#
-#
-#
-
-#
-#
-#
-#
-#
-
-#
-#
-#
-#
-
-# BRB BATHROOM
+5. then inside the model's `.forward()` we do `torch.cumsum()` operations similar to how `<|endoftext|>` ones work for block-causal masks in order to create the flex-attention mask
