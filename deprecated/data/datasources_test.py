@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pyarrow.dataset import dataset
 
-from utils import import_from_nested_path
+from deprecated.utils import import_from_nested_path
 from data_sources.datasource import DataSourceConfig, DataSource
 
 # Gather all datasets that need to be tested

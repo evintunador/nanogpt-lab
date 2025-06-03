@@ -4,7 +4,7 @@ import os
 import regex
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils import visualise_tokens
+from deprecated.utils import visualise_tokens
 
 # set __test__ to False for any file in tokenizers/ that should not be tested
 # (AKA purposely does not meet API requierments)

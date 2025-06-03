@@ -22,15 +22,13 @@ This specific example tokenizer is built off the Tiktoken educational implementa
 https://github.com/openai/tiktoken/blob/main/tiktoken/_educational.py
 """
 import os
-import pickle
-from pathlib import Path
 
 from tqdm import tqdm
 import numpy as np
 import regex
 from datasets import Dataset
 
-from utils import visualise_tokens
+from deprecated.utils import visualise_tokens
 
 # set __test__ to False for any file in tokenizers/ that should not be tested
 # (AKA purposely does not meet API requierments)

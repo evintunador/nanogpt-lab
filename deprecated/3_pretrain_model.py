@@ -716,7 +716,7 @@ if master_process:
             print0(f"- File not found, skipping: {file_path}")
 
     # Handle tokenizer separately as it's a .pkl file
-    tokenizer_path = Path(f"data/{args.tokenizer}")
+    tokenizer_path = Path(f"deprecated/data/{args.tokenizer}")
     if tokenizer_path.exists():
         try:
             with open(tokenizer_path, 'rb') as f:
@@ -1191,7 +1191,7 @@ def evaluate_hellaswag(model, data_path, limit=1014):
                 f"[95% CI: {ci_norm[0]:.3f}-{ci_norm[1]:.3f}]", console=True)
 
 # After training and sample generations, evaluate on HellaSwag
-hellaswag_path = "./data/hellaswag_val.jsonl" 
+hellaswag_path = "deprecated/data/hellaswag_val.jsonl"
 # Check if the HellaSwag data file exists
 if os.path.exists(hellaswag_path):
     print0(f"Found HellaSwag dataset at {hellaswag_path}", console=True)

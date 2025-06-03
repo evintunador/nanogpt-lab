@@ -5,11 +5,18 @@ the goal is to setup abstract base classes, a strict typing system, and a modula
 # PLANNING
 ### What needs to be abstract versus what limitations can we assume?
 - *file storage* - assume local directory using git-lfs
-### *SerDes/Logging*
+### *SerDes*
 - EVERYTHING has a `.save_to_dir(self, dir: str) -> None` and `.load_from_dir(cls, dir: str) -> cls`
     - this generally calls recursively on all submodules
-- also save the currently running root python file as a .txt inside this root `/experiments/YYYYMMDD_HHMMSS/`
+- also save the currently running root python file as a .txt inside this root `/experiments/YYYYMMDD_HHMMSS/` for replication/backup purposes
 - when loading, we should assert that the saved .txt backup is equal to the current file doing the loading
+- the experiments directory gets timestamped but if we want to reuse a given module frequently that's a manual copy & paste into the `/<module_name>/saved` directory?
+- it's not reasonable to use git-lfs for the pytorch state-dict files. instead let's require each model implement a `.save_to_cloud()` and `.load_from_cloud()` which will probably end up using huggingface
+### *LOGGING*
+- a log file that goes inside each experiment subdirectory
+- initialize a logger that then gets passed into each module upon initialization
+- should support some derivative of the `print0` function that puts rank 0 to console but all ranks to log.txt
+- 
 ### *DATA TYPES* 
 - keep it abstract with strict typing so that we know what inputs & outputs each module accepts
 - all modules specify datatype input & output for every single method they have
@@ -58,6 +65,9 @@ the goal is to setup abstract base classes, a strict typing system, and a modula
 - everyone's custom modules inherit from one of our ABCs and we first assert that and that they have the right abstractmethods
 - test file loops through files in its directory using `__test__: bool` and `__test_name__: str` to let the tests know whether & what to test
 - a given test file creates a mock data source, model, etc with the desired types from `.?_input_type()` and `.?_output_type()` which can likely be global fixtures
+### *OTHER THOUGHTS*
+- we'll create a `PyTorchModelCls` and a `PyTorchTrainerCls` to inherit and add any additional features specific to pytorch as well as enable further type assertions for module interaction compatibility
+- `utils.py` handles a bunch of helper functions that are used throughout the codebase like `print0` and `import_from_nested_path` (are we still using that?)
 
 
 

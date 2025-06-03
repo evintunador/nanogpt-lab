@@ -7,7 +7,7 @@ import string
 
 # Add the root directory to sys.path to allow importing utils
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from utils import import_from_nested_path
+from deprecated.utils import import_from_nested_path
 
 # Gather all tokenizers that need to be tested
 TOKENIZER_DIR = Path(__file__).parent.parent / "tokenizers"

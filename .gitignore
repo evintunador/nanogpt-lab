@@ -1,6 +1,7 @@
 __pycache__/
 venv/
-*.pt
 scratch.py
 temp_dir/
 **/temp_dir/
+*.pt # for saving pytorch models
+*.bin # for pre-caching tokens
