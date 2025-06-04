@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Generator
 
 from data_sources.datatypes import CustomDataType, CustomDataVal
 
@@ -33,6 +34,11 @@ class DataSource(ABC):
 
     @abstractmethod
     def get_data_generator(self) -> Generator[CustomDataVal, None, None]:
+        raise NotImplementedError
+
+    @abstractmethod
+    @property
+    def data_type(self) -> CustomDataType:
         raise NotImplementedError
 
     @abstractmethod

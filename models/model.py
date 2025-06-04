@@ -33,20 +33,6 @@ class Model(ABC):
         return self._config
 
     @abstractmethod
-    def save_to_dir(self, dir: str) -> None:
-        raise NotImplementedError
-
-    @abstractmethod
-    @classmethod
-    def load_from_dir(cls, dir: str) -> "Model":
-        raise NotImplementedError
-
-    @abstractmethod
-    @classmethod # is this redundant on the __init__ method?
-    def instantiate(cls, config: ModelConfig) -> "Model":
-        raise NotImplementedError
-
-    @abstractmethod
     def forward(self, input: Generator[CustomDataVal, None, None]) -> Generator[CustomDataVal, None, None]:
         raise NotImplementedError
 
@@ -58,4 +44,23 @@ class Model(ABC):
     @abstractmethod
     @property
     def forward_output_type(self) -> CustomDataType:
+        raise NotImplementedError
+
+    @abstractmethod
+    @property
+    def forward_target_type(self) -> CustomDataType:
+        raise NotImplementedError
+
+    @abstractmethod
+    def save_to_dir(self, dir: str) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    @classmethod
+    def load_from_dir(cls, dir: str) -> "Model":
+        raise NotImplementedError
+
+    @abstractmethod
+    @classmethod # is this redundant on the __init__ method?
+    def instantiate(cls, config: ModelConfig) -> "Model":
         raise NotImplementedError

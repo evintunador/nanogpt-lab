@@ -33,7 +33,7 @@ the goal is to setup abstract base classes, a strict typing system, and a modula
     - `.initialize(cls, cfg: DataSourceConfig) -> cls` 
         - eg. might require as an argument a model that is a tokenizer, meaning it has required inference type of
         `Union[Text, BatchedText]` and inference output `Union[TokenSequence, BatchedTokenSequence]`
-    - for de-serialization on a data source that does pre-caching, we just save the path where pre-cached data lies, hope the data is still there, and if not call `.pre-cache()` again
+    - for de-serialization on a data source that does pre-caching, we just save the path where pre-cached data lies, hope the data is still there, and if not call `.pre_cache()` again
 ### *MODELS*
 - pretty abstract in order to support weird input/output types (eg. DAGSeq2DAGSeq, tokenizers count as models, etc)
 - required methods: 
@@ -50,7 +50,7 @@ the goal is to setup abstract base classes, a strict typing system, and a modula
     - `.load_checkpoint(cls, checkpoint_dir: str) -> cls`
         - because in the checkpont you saved info on the trainer, such as how many iterations had already gone through, that means to resume you'll have to run & not use the data generator for that many iterations, whereas the model checkpoint is a simpler load
     - `.train(self) -> ModelCls`
-        - `.train_input_type(self) -> CustomDataType:` and `.train_output_type(self) -> CustomDataType`  
+        - `.train_input_type(self) -> CustomDataType:` and `.train_target_type(self) -> CustomDataType`  
 ### *BENCHMARKS* 
 - data for benchmarking must come in the form of a data source (eg. `HellaSwagDataSourceCls`)
 - a benchmark module itself takes in a data source and a model and just handles the computation of the metric on the data (eg. `MultipleChoiceLogitsBenchmark`, `CorrectAnswerInTopK`, `SmarterLLMGrader`, etc)

@@ -49,21 +49,9 @@ class PyTorchModel(Model, ABC):
         return self._model
 
     @abstractmethod
-    def save_to_dir(self, dir: str) -> None:
-        raise NotImplementedError
-
-    @abstractmethod
-    @classmethod
-    def load_from_dir(cls, dir: str) -> "PyTorchModel":
-        raise NotImplementedError
-
-    @abstractmethod
-    @classmethod # is this redundant on the __init__ method?
-    def instantiate(cls, config: PyTorchModelConfig) -> "PyTorchModel":
-        raise NotImplementedError
-
-    @abstractmethod
     def forward(self, input: Generator[CustomDataVal, None, None]) -> Generator[CustomDataVal, None, None]:
+        # the .forward() method needs to be the inner part that supports both training and inference
+        # for example, in LLMs it would input Tokens and output Tensor (the sized [b,s,v] logits)
         raise NotImplementedError
 
     @abstractmethod
@@ -78,6 +66,8 @@ class PyTorchModel(Model, ABC):
 
     @abstractmethod
     def inference(self, input: Generator[CustomDataVal, None, None]) -> Generator[CustomDataVal, None, None]:
+        # the .inference() method should wrap around the .forward() method for actual every-day use of the model
+        # for example, in LLMs it input would be Text and output would be Text
         raise NotImplementedError
 
     @abstractmethod
@@ -88,4 +78,29 @@ class PyTorchModel(Model, ABC):
     @abstractmethod
     @property
     def inference_output_type(self) -> CustomDataType:
+        raise NotImplementedError
+
+    @abstractmethod
+    def save_to_dir(self, dir: str) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    @classmethod
+    def load_from_dir(cls, dir: str) -> "PyTorchModel":
+        raise NotImplementedError
+
+    @abstractmethod
+    def save_to_cloud(self, api_key: str, addr: str) -> None:
+        # TODO: general huggingface model save
+        raise NotImplementedError
+
+    @abstractmethod
+    @classmethod
+    def load_from_cloud(cls, config: "PyTorchModelConfig", api_key: str, addr: str) -> "PyTorchModel":
+        # TODO: general huggingface model load
+        raise NotImplementedError
+
+    @abstractmethod
+    @classmethod # is this redundant on the __init__ method?
+    def instantiate(cls, config: PyTorchModelConfig) -> "PyTorchModel":
         raise NotImplementedError
