@@ -1,1 +1,0 @@
-1b tokens (seed 42) trained on 4x45gb GPUs for $1.761/hr
