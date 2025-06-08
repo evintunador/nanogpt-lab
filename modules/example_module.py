@@ -10,7 +10,7 @@ except ImportError:
     # This allows the file to be imported and inspected on systems without Triton.
     TRITON_AVAILABLE = False
 
-from modules.bulk_testing_utils import ComponentTestConfig
+from modules.module_test_config import ModuleTestConfig
 
 
 ##################################################
@@ -52,13 +52,12 @@ if TRITON_AVAILABLE:
         x_ptr, y_ptr,               
         output_ptr,                 
         n_elements,                 
-        loop_stride,                
-        OP: tl.constexpr,           
+        loop_stride,
         BLOCK_SIZE: tl.constexpr,   
     ):   
         program_id = tl.program_id(axis=0) 
         block_start_x = program_id * BLOCK_SIZE
-        block_start_y = block_start_x % loop_stride # the looping is how we handle broadcasting
+        block_start_y = block_start_x % loop_stride
         offsets_x = block_start_x + tl.arange(0, BLOCK_SIZE)
         offsets_y = (block_start_y + tl.arange(0, BLOCK_SIZE)) % loop_stride
         mask_x = offsets_x < n_elements
@@ -76,8 +75,7 @@ if TRITON_AVAILABLE:
         dx_ptr,             
         do_ptr,                     
         n_elements,                 
-        loop_stride,                
-        OP: tl.constexpr,           
+        loop_stride,
         BLOCK_SIZE: tl.constexpr,   
     ):
         pid = tl.program_id(axis=0)
@@ -97,7 +95,7 @@ if TRITON_AVAILABLE:
     @triton.autotune([triton.Config({"BLOCK_SIZE": 1024}, num_stages=3, num_warps=8,)], key=["n_elements", "loop_stride"])
     @triton.jit
     def elementwise_mul_backward_dLdy(
-        x_ptr, y_ptr,              
+        x_ptr,
         dLdy_ptr,            
         dLdz_ptr,                    
         n_elements,                
@@ -151,16 +149,17 @@ if TRITON_AVAILABLE:
             if x.requires_grad:
                 elementwise_mul_backward_dLdx[ctx.grid](y, dLdx, dLdz, ctx.n_elements, ctx.loop_stride)
             if y.requires_grad:
-                elementwise_mul_backward_dLdy[ctx.grid](x, y, dLdy, dLdz, ctx.n_elements, ctx.loop_stride)
+                elementwise_mul_backward_dLdy[ctx.grid](x, dLdy, dLdz, ctx.n_elements, ctx.loop_stride)
             return dLdx, dLdy
 
 
-    class ExampleCustomKernelModule(ExampleModule):
+    class ExampleKernelModule(ExampleModule):
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             return _KernelFn.apply(x, self.weight)
+
 else:
     # If Triton is not available, the kernel module class is None.
-    ExampleCustomKernelModule = None
+    ExampleKernelModule = None
     
 
 ##################################################
@@ -206,9 +205,9 @@ def example_kernel_run_filter(inputs: List[torch.Tensor]) -> bool:
     #if inputs[0].shape[-1] % 32 != 0: return False
     return True
 
-__test_config__ = ComponentTestConfig(
+__test_config__ = ModuleTestConfig(
     module_class=ExampleModule,
-    kernel_module_class=ExampleCustomKernelModule,
+    kernel_class=ExampleKernelModule,
     test_cases=[
         {
             'init_args': {'dim': dim},

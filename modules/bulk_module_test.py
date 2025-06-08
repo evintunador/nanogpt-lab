@@ -1,17 +1,72 @@
 import os
-import itertools
 import importlib
 import sys
+from typing import List, Dict, Any, Union, Sequence
 
 import pytest
 import torch
+import torch.nn as nn
 
-from modules.bulk_testing_utils import (
-    list_all_files_in_folder_and_subdirs,
-    get_available_devices
-)
+from module_test_config import ModuleTestConfig
 
-def discover_test_configs():
+
+def list_all_files_in_folder_and_subdirs(folder_path: str) -> List[str]:
+    """
+    Recursively list all .py files in the given folder and its subdirectories.
+    Returns a list of file paths relative to the folder_path.
+    """
+    all_files = []
+    for root, dirs, files in os.walk(folder_path):
+        for file in files:
+            if not file.endswith('.py'):
+                continue
+            rel_dir = os.path.relpath(root, folder_path)
+            if rel_dir == ".":
+                rel_file = file
+            else:
+                rel_file = os.path.join(rel_dir, file)
+            all_files.append(rel_file)
+    return all_files
+
+
+def get_available_devices(exclude: List[str] = []) -> (List[str], List[str]):
+    available_devices = []
+    available_devices_with_ranks = []
+    world_size = torch.cuda.device_count()
+
+    # Always include CPU
+    available_devices.append('cpu')
+
+    # Check for CUDA devices
+    if torch.cuda.is_available():
+        available_devices.append('cuda')
+
+        if world_size > 1:
+            for i in range(world_size):
+                available_devices_with_ranks.append(f'cuda:{i}')
+
+    # Check for MPS devices (Apple Silicon)
+    if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        available_devices.append('mps')
+
+    # Check for HIP devices (AMD ROCm)
+    if hasattr(torch, 'has_hip') and torch.has_hip and torch.device('hip').type == 'hip':
+        available_devices.append('hip')
+
+        if world_size > 1:
+            for i in range(world_size):
+                available_devices_with_ranks.append(f'hip:{i}')
+
+    if exclude:
+        def should_keep(dev):
+            return not any(ex in dev for ex in exclude)
+        available_devices = [dev for dev in available_devices if should_keep(dev)]
+        available_devices_with_ranks = [dev for dev in available_devices_with_ranks if should_keep(dev)]
+
+    return available_devices, available_devices_with_ranks
+
+
+def discover_test_configs() -> List[ModuleTestConfig]:
     current_dir = os.path.dirname(os.path.abspath(__file__))
     tests_root = os.path.dirname(current_dir)
 
@@ -19,7 +74,7 @@ def discover_test_configs():
         sys.path.insert(0, tests_root)
 
     all_files = list_all_files_in_folder_and_subdirs(current_dir)
-    all_files = [f for f in all_files if f not in ['bulk_module_test.py', 'bulk_testing_utils.py']]
+    all_files = [f for f in all_files if f not in ['bulk_module_test.py', 'module_test_config.py']]
     
     configs = []
     for file in all_files:
@@ -39,7 +94,8 @@ def discover_test_configs():
             
     return configs
 
-def build_test_suite(test_configs, available_devices):
+
+def build_test_suite(test_configs: List[ModuleTestConfig], available_devices: List[str]) -> List[Dict[str, Any]]:
     test_suite = []
     for config in test_configs:
         for i, test_case in enumerate(config.test_cases):
@@ -50,7 +106,7 @@ def build_test_suite(test_configs, available_devices):
                 test_suite.append(
                     pytest.param(
                         config.module_class, 
-                        config.kernel_module_class, 
+                        config.kernel_class,
                         test_case, 
                         device, 
                         id=test_id
@@ -58,7 +114,8 @@ def build_test_suite(test_configs, available_devices):
                     )
     return test_suite
 
-def get_total_loss(outputs):
+
+def get_total_loss(outputs: Union[torch.Tensor, Sequence[torch.Tensor]]) -> torch.Tensor:
     """Computes a scalar loss from a single tensor or a tuple of tensors."""
     if isinstance(outputs, torch.Tensor):
         # Handles the common case of a single tensor output
@@ -71,13 +128,14 @@ def get_total_loss(outputs):
             total_loss += out.sum()
     return total_loss
 
+
 ALL_TEST_CONFIGS = discover_test_configs()
 AVAILABLE_DEVICES, _ = get_available_devices()
 TEST_SUITE = build_test_suite(ALL_TEST_CONFIGS, AVAILABLE_DEVICES)
-print()
+
 
 @pytest.mark.parametrize("PytorchModuleCls, KernelModuleCls, test_case, device", TEST_SUITE)
-def test_bulk_module(PytorchModuleCls, KernelModuleCls, test_case, device):
+def test_bulk_module(PytorchModuleCls: nn.Module, KernelModuleCls: nn.Module, test_case: Dict[str, Any], device: str):
     """
     This single function runs a complete test for one module configuration.
     Pytest calls this function repeatedly for each parameter set in TEST_SUITE.
