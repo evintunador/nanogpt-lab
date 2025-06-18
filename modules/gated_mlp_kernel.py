@@ -4,6 +4,8 @@ import triton
 import triton.language as tl
 
 
+# TODO: Wipe all this and write a GatedMLPKernel with choosable activation functions
+
 @triton.autotune([triton.Config({"BLOCK_SIZE": 1024}, num_stages=3, num_warps=8,)], key=["n_elements", "loop_stride"])
 @triton.jit
 def elementwise_mul_forward(
