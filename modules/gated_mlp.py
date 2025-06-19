@@ -34,7 +34,6 @@ class GatedMLP(nn.Module):
         act_registry = {
             "relu": nn.ReLU(),
             "silu": nn.SiLU(),
-            "gelu": nn.GELU(),
             "relu2": ReLU2(),
         }
         self.act_fn = act_registry[self.act_str]
@@ -44,7 +43,10 @@ class GatedMLP(nn.Module):
         self.Wdown = nn.Parameter(torch.randn(size=(self.hidden_dim, self.out_dim)))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return ((x @ self.Wup) * self.act_fn(x @ self.Wgate)) @ self.Wdown
+        @torch.compile
+        def fwd(x, Wup, Wgate, Wdown, act_fn):
+            return ((x @ Wup) * act_fn(x @ Wgate)) @ Wdown
+        return fwd(x, self.Wup, self.Wgate, self.Wdown, self.act_fn)
 
 
 ##################################################
