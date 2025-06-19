@@ -24,7 +24,8 @@ class ReLU2(nn.Module):
         return torch.relu(x) ** 2
 
 class GatedMLP(nn.Module):
-    def __init__(self, in_dim: int, out_dim: int, hidden_dim: int, activation: str):
+    def __init__(self, in_dim: int, out_dim: int, hidden_dim: int, activation: str, 
+                 dtype: torch.dtype = torch.float32, device: str = 'cpu'):
         super().__init__()
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -38,9 +39,9 @@ class GatedMLP(nn.Module):
         }
         self.act_fn = act_registry[self.act_str]
 
-        self.Wup = nn.Parameter(torch.randn(size=(self.in_dim, self.hidden_dim)))
-        self.Wgate = nn.Parameter(torch.randn(size=(self.in_dim, self.hidden_dim)))
-        self.Wdown = nn.Parameter(torch.randn(size=(self.hidden_dim, self.out_dim)))
+        self.Wup = nn.Parameter(torch.randn(size=(self.in_dim, self.hidden_dim), dtype=dtype, device=device))
+        self.Wgate = nn.Parameter(torch.randn(size=(self.in_dim, self.hidden_dim), dtype=dtype, device=device))
+        self.Wdown = nn.Parameter(torch.randn(size=(self.hidden_dim, self.out_dim), dtype=dtype, device=device))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         @torch.compile
@@ -55,7 +56,8 @@ class GatedMLP(nn.Module):
 
 class SimpleGatedMLP(nn.Module):
     """Alternative implementation without torch.compile for testing"""
-    def __init__(self, in_dim: int, out_dim: int, hidden_dim: int, activation: str):
+    def __init__(self, in_dim: int, out_dim: int, hidden_dim: int, activation: str,
+                 dtype: torch.dtype = torch.float32, device: str = 'cpu'):
         super().__init__()
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -69,9 +71,9 @@ class SimpleGatedMLP(nn.Module):
         }
         self.act_fn = act_registry[self.act_str]
 
-        self.Wup = nn.Parameter(torch.randn(size=(self.in_dim, self.hidden_dim)))
-        self.Wgate = nn.Parameter(torch.randn(size=(self.in_dim, self.hidden_dim)))
-        self.Wdown = nn.Parameter(torch.randn(size=(self.hidden_dim, self.out_dim)))
+        self.Wup = nn.Parameter(torch.randn(size=(self.in_dim, self.hidden_dim), dtype=dtype, device=device))
+        self.Wgate = nn.Parameter(torch.randn(size=(self.in_dim, self.hidden_dim), dtype=dtype, device=device))
+        self.Wdown = nn.Parameter(torch.randn(size=(self.hidden_dim, self.out_dim), dtype=dtype, device=device))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Same logic as GatedMLP but without torch.compile
@@ -111,15 +113,15 @@ except (ImportError, ModuleNotFoundError):
 
 def pytorch_output_validator(
         module: nn.Module,
-        inputs: Union[torch.Tensor, Tuple[Any]],
-        outputs: Union[torch.Tensor, Tuple[Any]],
+        inputs: Tuple[Any],
+        outputs: Tuple[Any],
 ) -> None:
     """
     Validates whether the pytorch output meets expectations.
-    Handles single tensor or tuple outputs by checking the first tensor.
+    Testing framework always passes in tuples even if there's only one input/output tensor
     """
-    input_tensor = inputs
-    output_tensor = outputs
+    input_tensor = inputs[0] 
+    output_tensor = outputs[0]
     expected_shape = (*input_tensor.shape[:-1], module.out_dim)
     assert output_tensor.shape == expected_shape, f"Expected output shape {expected_shape}, but got {output_tensor.shape}"
     assert output_tensor.dtype == input_tensor.dtype
@@ -151,7 +153,7 @@ __test_config__ = ModuleTestConfig(
     reference_competitor='PyTorch',
     test_cases=[
         {
-            'init_args': {'in_dim': dim, 'out_dim': dim, 'hidden_dim': dim * 4, 'activation': 'relu2'},
+            'init_args': {'in_dim': dim, 'out_dim': dim, 'hidden_dim': dim * 4, 'activation': 'relu2', 'dtype': dt},
             'input_args': lambda dev, d=dim, dt=dt: (torch.randn(16, d, device=dev, dtype=dt, requires_grad=True),),
             'pytorch_output_validator': pytorch_output_validator,
             'kernel_run_filter': kernel_run_filter,                     # Optional

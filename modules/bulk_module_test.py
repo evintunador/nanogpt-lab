@@ -16,10 +16,8 @@ from modules.base_test_bench_utils import (
 
 def build_test_suite(test_configs: List[ModuleTestConfig], available_devices: List[str]) -> List[Any]:
     test_suite = []
-    print(f"[DEBUG] Building test suite with {len(test_configs)} configs and devices: {available_devices}")
     
     for config in test_configs:
-        print(f"[DEBUG] Processing config with competitors: {list(config.competitors.keys())}")
         
         # Get the reference competitor class
         ref_competitor_config = config.competitors.get(config.reference_competitor)
@@ -28,34 +26,26 @@ def build_test_suite(test_configs: List[ModuleTestConfig], available_devices: Li
             continue
 
         ReferenceModuleCls = ref_competitor_config.module_class
-        print(f"[DEBUG] Reference: {config.reference_competitor} -> {ReferenceModuleCls}")
 
         # Compare every other competitor to the reference
         for competitor_name, competitor_config in config.competitors.items():
             if competitor_name == config.reference_competitor:
-                print(f"[DEBUG] Skipping reference competitor: {competitor_name}")
                 continue
 
             # For now, we only test non-TP modules in this suite.
             if competitor_config.tp_config:
-                print(f"[DEBUG] Skipping TP competitor: {competitor_name}")
                 continue
                 
             CompetitorModuleCls = competitor_config.module_class
             if CompetitorModuleCls is None:
-                print(f"[DEBUG] Skipping competitor with None module_class: {competitor_name}")
                 continue
-
-            print(f"[DEBUG] Processing competitor: {competitor_name} -> {CompetitorModuleCls}")
 
             for i, test_case in enumerate(config.test_cases):
                 competitor_exclusions = competitor_config.excluded_devices or []
                 devices_to_test = [d for d in available_devices if d not in competitor_exclusions]
-                print(f"[DEBUG] Test case {i}: devices {devices_to_test} (excluded: {competitor_exclusions})")
                 
                 for device in devices_to_test:
                     test_id = f"{config.reference_competitor}_vs_{competitor_name}-case{i}-{device}"
-                    print(f"[DEBUG] Adding test: {test_id}")
                     test_suite.append(
                         pytest.param(
                             ReferenceModuleCls,
@@ -66,7 +56,6 @@ def build_test_suite(test_configs: List[ModuleTestConfig], available_devices: Li
                         )
                     )
     
-    print(f"[DEBUG] Generated {len(test_suite)} total tests")
     return test_suite
 
 
@@ -84,21 +73,14 @@ def get_total_loss(outputs: Union[torch.Tensor, Sequence[torch.Tensor]]) -> torc
     return total_loss
 
 
-# Add debugging for test discovery
-print("[DEBUG] Starting test discovery...")
 ALL_TEST_CONFIGS = discover_dunder_objects(dunder='__test_config__', object=ModuleTestConfig)
-print(f"[DEBUG] Found {len(ALL_TEST_CONFIGS)} test configs")
-
 AVAILABLE_DEVICES, _ = get_available_devices()
-print(f"[DEBUG] Available devices: {AVAILABLE_DEVICES}")
-
 TEST_SUITE = build_test_suite(ALL_TEST_CONFIGS, AVAILABLE_DEVICES)
-print(f"[DEBUG] Final test suite has {len(TEST_SUITE)} tests")
 
 # Add this to make pytest show more info about parameterized tests
 if len(TEST_SUITE) == 0:
-    print("[ERROR] No tests generated! Creating a dummy failing test to show the issue.")
-    TEST_SUITE = [pytest.param(None, None, None, None, id="no_tests_generated")]
+    print("[ERROR] No tests generated!")
+    exit()
 
 
 @pytest.mark.parametrize("ReferenceModuleCls, CompetitorModuleCls, test_case, device", TEST_SUITE)
@@ -128,7 +110,8 @@ def test_bulk_module_correctness(
     # Run a validator on the reference implementation output to catch baseline bugs
     ref_outputs = ref_module(*ref_inputs)
     if 'pytorch_output_validator' in test_case:
-        test_case['pytorch_output_validator'](ref_module, ref_inputs, ref_outputs)
+        outputs_for_validator = ref_outputs if isinstance(ref_outputs, tuple) else (ref_outputs,)
+        test_case['pytorch_output_validator'](ref_module, ref_inputs, outputs_for_validator)
 
     # Check if the competitor module should be run
     if 'kernel_run_filter' in test_case and not test_case['kernel_run_filter'](ref_inputs):
