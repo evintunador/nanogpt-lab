@@ -50,6 +50,37 @@ class GatedMLP(nn.Module):
 
 
 ##################################################
+####### ALTERNATIVE IMPLEMENTATIONS FOR TESTING ###
+##################################################
+
+class SimpleGatedMLP(nn.Module):
+    """Alternative implementation without torch.compile for testing"""
+    def __init__(self, in_dim: int, out_dim: int, hidden_dim: int, activation: str):
+        super().__init__()
+        self.in_dim = in_dim
+        self.out_dim = out_dim
+        self.hidden_dim = next_multiple(x=hidden_dim, n=128)
+
+        self.act_str = activation.lower()
+        act_registry = {
+            "relu": nn.ReLU(),
+            "silu": nn.SiLU(),
+            "relu2": ReLU2(),
+        }
+        self.act_fn = act_registry[self.act_str]
+
+        self.Wup = nn.Parameter(torch.randn(size=(self.in_dim, self.hidden_dim)))
+        self.Wgate = nn.Parameter(torch.randn(size=(self.in_dim, self.hidden_dim)))
+        self.Wdown = nn.Parameter(torch.randn(size=(self.hidden_dim, self.out_dim)))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Same logic as GatedMLP but without torch.compile
+        up = x @ self.Wup
+        gate = self.act_fn(x @ self.Wgate)
+        return (up * gate) @ self.Wdown
+
+
+##################################################
 ####### (OPTIONAL) CUSTOM KERNEL VERSION #########
 ##################################################
 """
@@ -59,18 +90,15 @@ This allows for us to support a variety of devices
 """
 
 try:
-    #from .gated_mlp_kernel import GatedMLPFunctional
+    from modules.gated_mlp_kernel import _GatedMLPKernelFn
 
     class TritonGatedMLP(GatedMLP):
         def forward(self, x: torch.Tensor) -> torch.Tensor:
-            # The user-provided kernel would be used here.
-            # For now, we call the parent to ensure tests pass.
-            return super().forward(x)
-            # return GatedMLPFunctional.apply(
-            #     x,
-            #     self.Wup, self.Wgate, self.Wdown,
-            #     self.act_str,
-            # )
+            return _GatedMLPKernelFn.apply(
+                x,
+                self.Wup, self.Wgate, self.Wdown,
+                self.act_str,
+            )
         
 except (ImportError, ModuleNotFoundError):
     TritonGatedMLP = None
@@ -90,8 +118,8 @@ def pytorch_output_validator(
     Validates whether the pytorch output meets expectations.
     Handles single tensor or tuple outputs by checking the first tensor.
     """
-    input_tensor = inputs if isinstance(inputs, torch.Tensor) else inputs[0]
-    output_tensor = outputs if isinstance(outputs, torch.Tensor) else outputs[0]
+    input_tensor = inputs
+    output_tensor = outputs
     expected_shape = (*input_tensor.shape[:-1], module.out_dim)
     assert output_tensor.shape == expected_shape, f"Expected output shape {expected_shape}, but got {output_tensor.shape}"
     assert output_tensor.dtype == input_tensor.dtype
@@ -113,6 +141,7 @@ def kernel_run_filter(inputs: Union[torch.Tensor, Tuple[Any]]) -> bool:
 
 __competitors__ = {
     'PyTorch': Competitor(module_class=GatedMLP),
+    'Simple': Competitor(module_class=SimpleGatedMLP),
     'Triton': Competitor(module_class=TritonGatedMLP, excluded_devices=['mps', 'cpu']),
 }
 
