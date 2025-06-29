@@ -1,33 +1,25 @@
-from typing import List, Sequence, Union
+from typing import List, Sequence, Union, Callable
 import os
 import sys
 import time
+import itertools
+import argparse
+
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 from tqdm import tqdm
 import torch
 import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
 
-from modules.base_test_bench_utils import ModuleBenchmarkConfig, discover_dunder_objects, get_available_devices
+from modules.base_test_bench_utils import (
+    BenchmarkConfig, 
+    discover_dunder_objects, 
+    get_available_devices,
+    get_total_loss,
+)
 
-# Use a consistent color cycle
-plot_colors = list(mcolors.TABLEAU_COLORS.keys())
-
-
-def get_total_loss(outputs: Union[torch.Tensor, Sequence[torch.Tensor]]) -> torch.Tensor:
-    """Computes a scalar loss from a single tensor or a tuple of tensors."""
-    if isinstance(outputs, torch.Tensor):
-        if not outputs.is_floating_point(): return None
-        # Gradients need a scalar loss
-        return outputs.sum()
-    
-    total_loss = 0
-    # Handles tuple outputs, summing only the floating point tensors
-    for out in outputs:
-        if isinstance(out, torch.Tensor) and out.is_floating_point():
-            total_loss += out.sum()
-    return total_loss
 
 def measure_performance(
     module: torch.nn.Module, 
@@ -45,7 +37,7 @@ def measure_performance(
     for _ in range(5):
         outputs = module(*inputs)
         loss = get_total_loss(outputs)
-        if loss is not None:
+        if loss is not None and loss.requires_grad:
             loss.backward()
             module.zero_grad(set_to_none=True)
     
@@ -73,23 +65,34 @@ def measure_performance(
         fwd_time_ms = (end_time - start_time) * 1000 / num_repeats
 
     bwd_time_ms = -1.0
+    # To measure backward pass, we need to run forward pass first.
+    # We will measure fwd+bwd and subtract fwd.
+    # this is done bc of graph issues with modules that use torch.compile on mps; probably not an ideal fix
+    outputs = module(*inputs)
     loss = get_total_loss(outputs)
+
     if loss is not None and loss.requires_grad:
         if device_type == 'cuda':
             start_event.record()
             for _ in range(num_repeats):
-                loss.backward(retain_graph=True)
+                outputs = module(*inputs)
+                loss = get_total_loss(outputs)
+                loss.backward()
             end_event.record()
             torch.cuda.synchronize()
-            bwd_time_ms = start_event.elapsed_time(end_event) / num_repeats
+            total_time_ms = start_event.elapsed_time(end_event) / num_repeats
+            bwd_time_ms = total_time_ms - fwd_time_ms
         else:  # MPS and CPU
             start_time = time.perf_counter()
             for _ in range(num_repeats):
-                loss.backward(retain_graph=True)
+                outputs = module(*inputs)
+                loss = get_total_loss(outputs)
+                loss.backward()
             if device_type == 'mps': torch.mps.synchronize()
             end_time = time.perf_counter()
-            bwd_time_ms = (end_time - start_time) * 1000 / num_repeats
-
+            total_time_ms = (end_time - start_time) * 1000 / num_repeats
+            bwd_time_ms = total_time_ms - fwd_time_ms
+            
     module.zero_grad(set_to_none=True)
     if device_type == 'cuda': torch.cuda.empty_cache()
 
@@ -116,76 +119,92 @@ def measure_performance(
     return {k: v for k, v in results.items() if v is not None}
 
 
-def run_benchmarks(configs: List[ModuleBenchmarkConfig], device: str, output_dir: str = "modules/benchmark_results"):
+def run_benchmarks(configs: List[BenchmarkConfig], device: str, output_dir: str = "modules/benchmarks"):
     os.makedirs(output_dir, exist_ok=True)
     device_type = torch.device(device).type
 
     for config in tqdm(configs, desc="All Benchmark Configs"):
-        for plot_spec in tqdm(config.plots, desc=f"Plots for {list(config.competitors.keys())}", leave=False):
-            plot_results = []
-            for x_val in tqdm(plot_spec.x_vals, desc=f"Plot '{plot_spec.plot_name}' on {device}", leave=False):
-                for competitor_name, competitor in config.competitors.items():
-                    if competitor.module_class is None: continue
-                    if device_type in (competitor.excluded_devices or []): continue
-                    if competitor.tp_config: continue
+        all_results = []
+        
+        param_names = list(config.parameter_space.keys())
+        param_values = config.parameter_space.values()
+        param_combinations = list(itertools.product(*param_values))
 
-                    init_args = plot_spec.init_arg_builder(x_val)
+        desc = f"Benchmarking {config.module_name} on {device}"
+        for combo in tqdm(param_combinations, desc=desc, leave=False):
+            params = dict(zip(param_names, combo))
+            
+            for competitor_name, competitor in config.competitors.items():
+                if competitor.module_class is None: continue
+                if competitor.tp_config: continue
+
+                try:
+                    init_args = config.init_arg_builder(params)
                     module = competitor.module_class(**init_args).to(device)
-                    inputs = plot_spec.input_provider(init_args, device)
+                    inputs = config.input_provider(init_args, device)
                     
+                    if competitor.run_filter and not competitor.run_filter(inputs):
+                        continue
+
                     perf_metrics = measure_performance(module, inputs, device)
                     
+                    # Store results in a tidy format
                     for metric_name, value in perf_metrics.items():
-                        plot_results.append({
-                            plot_spec.x_arg: x_val, 'competitor': competitor_name,
-                            'measurement': metric_name, 'value': value
-                        })
-            
-            if not plot_results: continue
-            
-            df = pd.DataFrame(plot_results)
-            fig, axes = plt.subplots(2, 2, figsize=(18, 12))
-            fig.suptitle(f"Benchmark: {plot_spec.plot_name} on {device_type.upper()}", fontsize=16)
-            axes = axes.flatten()
+                        result_row = params.copy()
+                        result_row['competitor'] = competitor_name
+                        result_row['measurement'] = metric_name
+                        result_row['value'] = value
+                        all_results.append(result_row)
 
-            axis_map = {
-                'Forward Time (ms)': (axes[0], 'Time (ms)'), 'Backward Time (ms)': (axes[1], 'Time (ms)'),
-                'Forward Peak Memory (GB)': (axes[2], 'Peak Memory (GB)'), 'Backward Peak Memory (GB)': (axes[3], 'Peak Memory (GB)'),
-            }
-            available_metrics = df['measurement'].unique()
+                except Exception as e:
+                    param_str = ', '.join(f'{k}={v.__name__ if isinstance(v, type) else v}' for k, v in params.items())
+                    tqdm.write(f"[WARNING] Skipping {competitor_name} for combo ({param_str}) on {device} due to error: {e}")
 
-            for metric_name, (ax, y_label) in axis_map.items():
-                if metric_name not in available_metrics:
-                    ax.text(0.5, 0.5, 'Not Measured', ha='center', va='center', fontsize=12, color='gray')
-                    ax.set_title(metric_name)
-                    ax.set_xticks([]); ax.set_yticks([])
-                    continue
-                
-                metric_df = df[df['measurement'] == metric_name]
-                ax.set_title(metric_name)
-                ax.set_xlabel(plot_spec.x_arg); ax.set_ylabel(y_label)
-                
-                for j, (name, group) in enumerate(metric_df.groupby('competitor')):
-                    ax.plot(group[plot_spec.x_arg], group['value'], marker='o', linestyle='-', label=name, color=plot_colors[j % len(plot_colors)])
-                
-                ax.grid(True); ax.legend()
+        if not all_results:
+            tqdm.write(f"No results generated for {config.module_name} on {device}. Skipping CSV generation.")
+            continue
 
-            plt.tight_layout(rect=[0, 0, 1, 0.96])
-            save_path = os.path.join(output_dir, f"{plot_spec.plot_name}_{device_type}.png")
-            plt.savefig(save_path)
-            plt.close(fig)
-            tqdm.write(f"Saved plot to {save_path}")
+        df = pd.DataFrame(all_results)
+        
+        # Sanitize dtype column for CSV
+        if 'dtype' in df.columns:
+            df['dtype'] = df['dtype'].apply(lambda x: str(x).split('.')[-1])
+
+        csv_filename = f"{config.module_name}_{device_type}.csv"
+        csv_path = os.path.join(output_dir, csv_filename)
+        df.to_csv(csv_path, index=False)
+        tqdm.write(f"Saved benchmark data for {config.module_name} to {csv_path}")
 
 
 if __name__ == "__main__":
-    benchmark_configs = discover_dunder_objects(dunder='__benchmark_config__', object=ModuleBenchmarkConfig)
-    available_devices, _ = get_available_devices()
-    
-    if not benchmark_configs:
+    parser = argparse.ArgumentParser(description="Run bulk module benchmarks.")
+    parser.add_argument(
+        '--module',
+        type=str,
+        default=None,
+        help="Run benchmark for a specific module by its module_name."
+    )
+    args = parser.parse_args()
+
+    all_benchmark_configs = discover_dunder_objects(dunder='__benchmark_config__', object=BenchmarkConfig)
+
+    if not all_benchmark_configs:
         print("No `__benchmark_config__` found in any module files. Nothing to do.")
         sys.exit(0)
+
+    if args.module:
+        benchmark_configs = [c for c in all_benchmark_configs if c.module_name == args.module]
+        if not benchmark_configs:
+            print(f"Error: No benchmark config found with module_name='{args.module}'.")
+            available_modules = sorted([c.module_name for c in all_benchmark_configs])
+            print(f"Available modules are: {available_modules}")
+            sys.exit(1)
+    else:
+        benchmark_configs = all_benchmark_configs
     
-    print(f"Found {len(benchmark_configs)} benchmark configurations.")
+    available_devices, _ = get_available_devices()
+    
+    print(f"Found {len(benchmark_configs)} benchmark configuration(s) to run.")
     for device in available_devices:
         if 'cpu' in device:
             continue

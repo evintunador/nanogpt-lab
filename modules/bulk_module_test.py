@@ -1,7 +1,4 @@
-import os
-import importlib
-import sys
-from typing import List, Dict, Any, Union, Sequence
+from typing import List, Dict, Any, Union, Sequence, Callable
 
 import pytest
 import torch
@@ -11,6 +8,7 @@ from modules.base_test_bench_utils import (
     ModuleTestConfig, 
     get_available_devices,
     discover_dunder_objects,
+    get_total_loss,
 )
 
 
@@ -29,8 +27,6 @@ def build_test_suite(test_configs: List[ModuleTestConfig], available_devices: Li
 
         # Compare every other competitor to the reference
         for competitor_name, competitor_config in config.competitors.items():
-            if competitor_name == config.reference_competitor:
-                continue
 
             # For now, we only test non-TP modules in this suite.
             if competitor_config.tp_config:
@@ -40,37 +36,23 @@ def build_test_suite(test_configs: List[ModuleTestConfig], available_devices: Li
             if CompetitorModuleCls is None:
                 continue
 
-            for i, test_case in enumerate(config.test_cases):
-                competitor_exclusions = competitor_config.excluded_devices or []
-                devices_to_test = [d for d in available_devices if d not in competitor_exclusions]
+            for test_case in config.test_cases:
+                run_filter = competitor_config.run_filter
                 
-                for device in devices_to_test:
-                    test_id = f"{config.reference_competitor}_vs_{competitor_name}-case{i}-{device}"
+                for device in available_devices:
+                    test_id = f"{config.reference_competitor}_vs_{competitor_name}_{test_case['case_descriptor']}_{device}"
                     test_suite.append(
                         pytest.param(
                             ReferenceModuleCls,
                             CompetitorModuleCls,
                             test_case,
                             device,
+                            run_filter,
                             id=test_id
                         )
                     )
     
     return test_suite
-
-
-def get_total_loss(outputs: Union[torch.Tensor, Sequence[torch.Tensor]]) -> torch.Tensor:
-    """Computes a scalar loss from a single tensor or a tuple of tensors."""
-    if isinstance(outputs, torch.Tensor):
-        # Handles the common case of a single tensor output
-        return outputs.sum()
-    
-    total_loss = 0
-    # Handles tuple outputs, summing only the floating point tensors
-    for out in outputs:
-        if isinstance(out, torch.Tensor) and out.is_floating_point():
-            total_loss += out.sum()
-    return total_loss
 
 
 ALL_TEST_CONFIGS = discover_dunder_objects(dunder='__test_config__', object=ModuleTestConfig)
@@ -83,12 +65,13 @@ if len(TEST_SUITE) == 0:
     exit()
 
 
-@pytest.mark.parametrize("ReferenceModuleCls, CompetitorModuleCls, test_case, device", TEST_SUITE)
+@pytest.mark.parametrize("ReferenceModuleCls, CompetitorModuleCls, test_case, device, run_filter", TEST_SUITE)
 def test_bulk_module_correctness(
     ReferenceModuleCls: nn.Module, 
     CompetitorModuleCls: nn.Module, 
     test_case: Dict[str, Any], 
-    device: str
+    device: str,
+    run_filter: Union[Callable[Union[torch.Tensor, Sequence[Any]], bool], "NoneType"],
 ):
     """
     This function tests that a 'competitor' module implementation is numerically equivalent
@@ -104,18 +87,18 @@ def test_bulk_module_correctness(
     ref_module = ReferenceModuleCls(**test_case['init_args']).to(device)
     ref_inputs = test_case['input_args'](device)
     
-    if not all(isinstance(t, torch.Tensor) for t in ref_inputs):
-        raise TypeError("All inputs provided by 'input_args' must be torch.Tensors.")
+    #if not all(isinstance(t, torch.Tensor) for t in ref_inputs):
+        #raise TypeError("All inputs provided by 'input_args' must be torch.Tensors.")
     
     # Run a validator on the reference implementation output to catch baseline bugs
     ref_outputs = ref_module(*ref_inputs)
-    if 'pytorch_output_validator' in test_case:
+    if 'output_validator' in test_case:
         outputs_for_validator = ref_outputs if isinstance(ref_outputs, tuple) else (ref_outputs,)
-        test_case['pytorch_output_validator'](ref_module, ref_inputs, outputs_for_validator)
+        test_case['output_validator'](ref_module, ref_inputs, outputs_for_validator)
 
     # Check if the competitor module should be run
-    if 'kernel_run_filter' in test_case and not test_case['kernel_run_filter'](ref_inputs):
-        pytest.skip(f"Skipping {CompetitorModuleCls.__name__} on {device} due to kernel_run_filter.")
+    if run_filter is not None and not run_filter(ref_inputs):
+        pytest.skip(f"Skipping {CompetitorModuleCls.__name__} on {device} due to run_filter()->False.")
         return
 
     # Instantiate the competitor module and copy weights
@@ -128,9 +111,7 @@ def test_bulk_module_correctness(
     # Test numerical equivalence
     get_total_loss(ref_outputs).backward()
     get_total_loss(competitor_outputs).backward()
-    
     tolerances = test_case.get('tolerances', {})
-    
     ref_outputs_tuple = ref_outputs if isinstance(ref_outputs, tuple) else (ref_outputs,)
     competitor_outputs_tuple = competitor_outputs if isinstance(competitor_outputs, tuple) else (competitor_outputs,)
 
